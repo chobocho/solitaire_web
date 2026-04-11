@@ -55,6 +55,7 @@ export class Renderer {
         this._winAnimCards = [];
         this._failAnimCards = [];
         this._animActive = false;
+        this._restartOnComplete = null;
         this.ctx = canvas.getContext('2d');
         this.layout = calcLayout(canvas.clientWidth, canvas.clientHeight);
     }
@@ -525,6 +526,11 @@ export class Renderer {
             this._failAnimCards = [];
             if (this._winAnimCards.length === 0)
                 this._animActive = false;
+            if (this._restartOnComplete) {
+                const cb = this._restartOnComplete;
+                this._restartOnComplete = null;
+                cb();
+            }
         }
     }
     _drawFire(cx, cy, w, _phase) {
@@ -541,6 +547,50 @@ export class Renderer {
             ctx.fillStyle = col;
             ctx.fill();
         }
+    }
+    // ─── 다시 하기 이펙트 (전체 카드 불타며 날아가기) ───────────────────────
+    /**
+     * 모든 덱의 카드를 강한 불꽃+바람으로 날려 보낸 뒤 onComplete 호출
+     */
+    startRestartEffect(game, onComplete) {
+        this._failAnimCards = [];
+        const { cardW, cardH } = this.layout;
+        // 모든 덱 수집 순서: Stock → Waste → Foundation → Tableau
+        const deckOrder = [
+            DeckIndex.Stock, DeckIndex.Waste,
+            DeckIndex.Found1, DeckIndex.Found2, DeckIndex.Found3, DeckIndex.Found4,
+            DeckIndex.Tab1, DeckIndex.Tab2, DeckIndex.Tab3, DeckIndex.Tab4,
+            DeckIndex.Tab5, DeckIndex.Tab6, DeckIndex.Tab7,
+        ];
+        for (const di of deckOrder) {
+            const deck = game.getDeck(di);
+            for (let ci = 0; ci < deck.size(); ci++) {
+                const rect = this.getCardRect(di, ci, game);
+                // 화면 중앙에서의 방향 벡터로 바깥쪽으로 날려 보냄
+                const cx = this.canvas.clientWidth / 2;
+                const cy = this.canvas.clientHeight / 2;
+                const dx = rect.x + cardW / 2 - cx;
+                const dy = rect.y + cardH / 2 - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const speed = 5 + Math.random() * 8;
+                this._failAnimCards.push({
+                    card: deck.get(ci),
+                    x: rect.x, y: rect.y,
+                    vx: (dx / dist) * speed + (Math.random() - 0.5) * 3,
+                    vy: (dy / dist) * speed - Math.random() * 4,
+                    angle: 0,
+                    vAngle: (Math.random() - 0.5) * 0.25,
+                    alpha: 1,
+                    delay: Math.random() * 0.8,
+                    elapsed: 0,
+                    w: cardW, h: cardH,
+                    scaleY: 1,
+                    firePhase: Math.random() * Math.PI * 2,
+                });
+            }
+        }
+        this._restartOnComplete = onComplete;
+        this._animActive = true;
     }
     get isAnimating() { return this._animActive; }
     // ─── 유틸 ─────────────────────────────────────────────────────────────

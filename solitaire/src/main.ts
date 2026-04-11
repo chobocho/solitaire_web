@@ -31,8 +31,9 @@ class GameController {
   private winOverlay!:     HTMLElement;
   private failOverlay!:         HTMLElement;
   private helpOverlay!:         HTMLElement;
-  private confirmNewOverlay!:    HTMLElement;
-  private confirmGiveupOverlay!: HTMLElement;
+  private confirmNewOverlay!:     HTMLElement;
+  private confirmGiveupOverlay!:  HTMLElement;
+  private confirmRestartOverlay!: HTMLElement;
   private elWinMoves!:     HTMLElement;
   private elWinTime!:      HTMLElement;
   private resumeBtn!:      HTMLButtonElement;
@@ -90,8 +91,9 @@ class GameController {
     this.elSavedInfo  = document.getElementById('saved-info')!;
     this.elSaveToast         = document.getElementById('save-toast')!;
     this.elStockCount        = document.getElementById('stock-count')!;
-    this.confirmNewOverlay    = document.getElementById('confirm-new-overlay')!;
-    this.confirmGiveupOverlay = document.getElementById('confirm-giveup-overlay')!;
+    this.confirmNewOverlay     = document.getElementById('confirm-new-overlay')!;
+    this.confirmGiveupOverlay  = document.getElementById('confirm-giveup-overlay')!;
+    this.confirmRestartOverlay = document.getElementById('confirm-restart-overlay')!;
   }
 
   private _bindButtons(): void {
@@ -133,6 +135,18 @@ class GameController {
     document.getElementById('btn-auto-complete')!.addEventListener('click', () => {
       this._autoComplete();
     });
+    // 다시 하기 버튼
+    document.getElementById('btn-restart')!.addEventListener('click', () => {
+      this._requestRestart();
+    });
+    document.getElementById('confirm-restart-yes')!.addEventListener('click', () => {
+      this.confirmRestartOverlay.classList.add('hidden');
+      this._doRestart();
+    });
+    document.getElementById('confirm-restart-no')!.addEventListener('click', () => {
+      this._dismissConfirm(this.confirmRestartOverlay);
+    });
+
     // 새 게임 확인 팝업
     document.getElementById('confirm-new-yes')!.addEventListener('click', () => {
       this.confirmNewOverlay.classList.add('hidden');
@@ -233,6 +247,25 @@ class GameController {
   }
 
   // ── 게임 흐름 ───────────────────────────────────────────────────────────
+
+  /** 다시 하기 요청: 게임 진행 중이면 확인 팝업 */
+  private _requestRestart(): void {
+    if (this.game.state !== 'play' && this.game.state !== 'pause') return;
+    this._pauseForConfirm();
+    this.confirmRestartOverlay.classList.remove('hidden');
+  }
+
+  /** 다시 하기 실행: 전체 카드 불타는 이펙트 후 새 게임 시작 */
+  private _doRestart(): void {
+    this._stopTimer();
+    this.storage.clear();
+    this.sound.play('lose');
+
+    // 이펙트 재생 — 완료 콜백에서 새 게임 시작
+    this.renderer.startRestartEffect(this.game, () => {
+      this._newGame();
+    });
+  }
 
   /** 새 게임 요청: 게임 진행 중이면 확인 팝업, 아니면 즉시 시작 */
   private _requestNewGame(): void {
@@ -405,6 +438,7 @@ class GameController {
     this.helpOverlay.classList.add('hidden');
     this.confirmNewOverlay.classList.add('hidden');
     this.confirmGiveupOverlay.classList.add('hidden');
+    this.confirmRestartOverlay.classList.add('hidden');
     this.elPauseBtn.textContent = '⏸ 일시정지';
   }
 

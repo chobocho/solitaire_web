@@ -43,6 +43,9 @@
         <button class="btn btn-mute" id="btn-mute" title="음소거 토글">
           🔊 소리
         </button>
+        <button class="btn btn-restart" id="btn-restart" title="다시 하기">
+          🔥 다시 하기
+        </button>
         <button class="btn btn-giveup" id="btn-give-up" title="포기">
           ✕ 포기
         </button>
@@ -106,6 +109,17 @@
         <button class="btn btn-new" id="overlay-fail-new-btn">
           ✦ 새 게임
         </button>
+      </div>
+
+      <!-- 다시 하기 확인 -->
+      <div class="overlay hidden" id="confirm-restart-overlay">
+        <div class="confirm-panel">
+          <p class="confirm-msg">🔥 현재 게임을 같은 카드 배열로<br>다시 시작할까요?</p>
+          <div class="confirm-btns">
+            <button class="btn btn-restart" id="confirm-restart-yes">🔥 다시 하기</button>
+            <button class="btn btn-cancel" id="confirm-restart-no">↩ 취소</button>
+          </div>
+        </div>
       </div>
 
       <!-- 새 게임 확인 -->

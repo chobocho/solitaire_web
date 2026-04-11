@@ -127,6 +127,12 @@ html, body {
 }
 .btn-mute:hover { background: #37474f; }
 
+.btn-restart {
+  background: #e65100;
+  color: #fff;
+}
+.btn-restart:hover { background: #bf360c; }
+
 .btn-giveup {
   background: #b71c1c;
   color: #fff;
@@ -398,6 +404,7 @@ kbd {
   .btn { padding: 3px 6px; font-size: 0.66rem; }
   .stat-value { font-size: 0.82rem; }
   .btn-autocomplete { display: none; }
+  .btn-restart { font-size: 0.66rem; }
 }
 
 @media (max-width: 400px) {
