@@ -39,26 +39,32 @@ class GameController {
         await this._checkSavedGame();
     }
     _setupDOM() {
-        this.canvas = document.getElementById('game-canvas');
-        this.elMoves = document.getElementById('moves-value');
-        this.elTimer = document.getElementById('timer-value');
-        this.elUndoBtn = document.getElementById('btn-undo');
-        this.elPauseBtn = document.getElementById('btn-pause');
-        this.elMuteBtn = document.getElementById('btn-mute');
-        this.startOverlay = document.getElementById('start-overlay');
-        this.pauseOverlay = document.getElementById('pause-overlay');
-        this.winOverlay = document.getElementById('win-overlay');
-        this.failOverlay = document.getElementById('fail-overlay');
-        this.helpOverlay = document.getElementById('help-overlay');
-        this.elWinMoves = document.getElementById('win-moves');
-        this.elWinTime = document.getElementById('win-time');
-        this.resumeBtn = document.getElementById('overlay-continue-btn');
-        this.elSavedInfo = document.getElementById('saved-info');
-        this.elSaveToast = document.getElementById('save-toast');
-        this.elStockCount = document.getElementById('stock-count');
-        this.confirmNewOverlay = document.getElementById('confirm-new-overlay');
-        this.confirmGiveupOverlay = document.getElementById('confirm-giveup-overlay');
-        this.confirmRestartOverlay = document.getElementById('confirm-restart-overlay');
+        const req = (id) => {
+            const el = document.getElementById(id);
+            if (!el)
+                throw new Error(`Required DOM element not found: #${id} — try hard-reload (Ctrl+Shift+R)`);
+            return el;
+        };
+        this.canvas = req('game-canvas');
+        this.elMoves = req('moves-value');
+        this.elTimer = req('timer-value');
+        this.elUndoBtn = req('btn-undo');
+        this.elPauseBtn = req('btn-pause');
+        this.elMuteBtn = req('btn-mute');
+        this.startOverlay = req('start-overlay');
+        this.pauseOverlay = req('pause-overlay');
+        this.winOverlay = req('win-overlay');
+        this.failOverlay = req('fail-overlay');
+        this.helpOverlay = req('help-overlay');
+        this.elWinMoves = req('win-moves');
+        this.elWinTime = req('win-time');
+        this.resumeBtn = req('overlay-continue-btn');
+        this.elSavedInfo = req('saved-info');
+        this.elSaveToast = req('save-toast');
+        this.elStockCount = req('stock-count');
+        this.confirmNewOverlay = req('confirm-new-overlay');
+        this.confirmGiveupOverlay = req('confirm-giveup-overlay');
+        this.confirmRestartOverlay = req('confirm-restart-overlay');
     }
     _bindButtons() {
         document.getElementById('btn-new').addEventListener('click', () => this._requestNewGame());

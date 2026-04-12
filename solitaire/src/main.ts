@@ -74,26 +74,31 @@ class GameController {
   }
 
   private _setupDOM(): void {
-    this.canvas       = document.getElementById('game-canvas') as HTMLCanvasElement;
-    this.elMoves      = document.getElementById('moves-value')!;
-    this.elTimer      = document.getElementById('timer-value')!;
-    this.elUndoBtn    = document.getElementById('btn-undo') as HTMLButtonElement;
-    this.elPauseBtn   = document.getElementById('btn-pause') as HTMLButtonElement;
-    this.elMuteBtn    = document.getElementById('btn-mute') as HTMLButtonElement;
-    this.startOverlay = document.getElementById('start-overlay')!;
-    this.pauseOverlay = document.getElementById('pause-overlay')!;
-    this.winOverlay   = document.getElementById('win-overlay')!;
-    this.failOverlay  = document.getElementById('fail-overlay')!;
-    this.helpOverlay  = document.getElementById('help-overlay')!;
-    this.elWinMoves   = document.getElementById('win-moves')!;
-    this.elWinTime    = document.getElementById('win-time')!;
-    this.resumeBtn    = document.getElementById('overlay-continue-btn') as HTMLButtonElement;
-    this.elSavedInfo  = document.getElementById('saved-info')!;
-    this.elSaveToast         = document.getElementById('save-toast')!;
-    this.elStockCount        = document.getElementById('stock-count')!;
-    this.confirmNewOverlay     = document.getElementById('confirm-new-overlay')!;
-    this.confirmGiveupOverlay  = document.getElementById('confirm-giveup-overlay')!;
-    this.confirmRestartOverlay = document.getElementById('confirm-restart-overlay')!;
+    const req = <T extends HTMLElement>(id: string): T => {
+      const el = document.getElementById(id) as T | null;
+      if (!el) throw new Error(`Required DOM element not found: #${id} — try hard-reload (Ctrl+Shift+R)`);
+      return el;
+    };
+    this.canvas       = req<HTMLCanvasElement>('game-canvas');
+    this.elMoves      = req('moves-value');
+    this.elTimer      = req('timer-value');
+    this.elUndoBtn    = req<HTMLButtonElement>('btn-undo');
+    this.elPauseBtn   = req<HTMLButtonElement>('btn-pause');
+    this.elMuteBtn    = req<HTMLButtonElement>('btn-mute');
+    this.startOverlay = req('start-overlay');
+    this.pauseOverlay = req('pause-overlay');
+    this.winOverlay   = req('win-overlay');
+    this.failOverlay  = req('fail-overlay');
+    this.helpOverlay  = req('help-overlay');
+    this.elWinMoves   = req('win-moves');
+    this.elWinTime    = req('win-time');
+    this.resumeBtn    = req<HTMLButtonElement>('overlay-continue-btn');
+    this.elSavedInfo  = req('saved-info');
+    this.elSaveToast         = req('save-toast');
+    this.elStockCount        = req('stock-count');
+    this.confirmNewOverlay     = req('confirm-new-overlay');
+    this.confirmGiveupOverlay  = req('confirm-giveup-overlay');
+    this.confirmRestartOverlay = req('confirm-restart-overlay');
   }
 
   private _bindButtons(): void {
