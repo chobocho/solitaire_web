@@ -106,8 +106,8 @@ export class SolitaireGame {
             return false;
         if (from === DeckIndex.Stock)
             return false;
-        // Foundation에서는 꺼낼 수 없음
-        if (this._isFoundation(from))
+        // Foundation에서 꺼낼 때는 1장만
+        if (this._isFoundation(from) && count !== 1)
             return false;
         // Foundation 이동: 1장만
         if (this._isFoundation(to) && count !== 1)

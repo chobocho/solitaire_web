@@ -271,8 +271,7 @@ export class InputHandler {
     const { deckIdx, cardIdx } = hit;
     const deck = this.game.getDeck(deckIdx);
 
-    // Foundation, Stock에서는 드래그 불가
-    if (deckIdx >= DeckIndex.Found1 && deckIdx <= DeckIndex.Found4) return;
+    // Stock에서는 드래그 불가
     if (deckIdx === DeckIndex.Stock) return;
 
     // 웨이스트: 맨 위 카드만 드래그
@@ -283,6 +282,23 @@ export class InputHandler {
       this.drag = {
         isDragging: true,
         fromDeck:   DeckIndex.Waste,
+        cards:      [card],
+        x, y,
+        offsetX: x - cardRect.x,
+        offsetY: y - cardRect.y,
+      };
+      this.canvas.classList.add('dragging');
+      return;
+    }
+
+    // Foundation: 맨 위 카드만 드래그
+    if (deckIdx >= DeckIndex.Found1 && deckIdx <= DeckIndex.Found4) {
+      const card = deck.top();
+      if (!card || !card.isOpen) return;
+      const cardRect = this.renderer.getCardRect(deckIdx, cardIdx, this.game);
+      this.drag = {
+        isDragging: true,
+        fromDeck:   deckIdx,
         cards:      [card],
         x, y,
         offsetX: x - cardRect.x,
