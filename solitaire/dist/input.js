@@ -177,6 +177,10 @@ export class InputHandler {
             if (e.key === 'Control')
                 this._kbState.ctrlHeld = false;
         });
+        // 창 포커스를 잃으면 ctrlHeld 해제 (Alt+Tab 등으로 keyup이 안 오는 경우 방지)
+        window.addEventListener('blur', () => {
+            this._kbState.ctrlHeld = false;
+        });
     }
     /** 덱 키 처리: 스톡은 뒤집기, 그 외는 선택→이동 */
     _handleDeckKey(deckIdx) {
@@ -328,6 +332,14 @@ export class InputHandler {
             const offset = (showCount - 1) * Math.min(18, Math.floor(cardW * 0.2));
             if (this._inRect(x, y, L.wasteX + offset, L.topRowY, cardW, cardH)) {
                 return { deckIdx: DeckIndex.Waste, cardIdx: waste.size() - 1 };
+            }
+        }
+        // Foundation 맨 위 카드
+        for (let i = 0; i < 4; i++) {
+            const fi = (DeckIndex.Found1 + i);
+            const deck = this.game.getDeck(fi);
+            if (!deck.isEmpty() && this._inRect(x, y, L.foundX[i], L.topRowY, cardW, cardH)) {
+                return { deckIdx: fi, cardIdx: deck.size() - 1 };
             }
         }
         // 태블로 (아래→위 탐색, 위 카드 우선)
