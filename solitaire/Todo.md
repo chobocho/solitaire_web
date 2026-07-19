@@ -70,3 +70,27 @@ src/ 전체 8개 파일(2,738줄), index.html, tsconfig.json 리뷰 기준.
 - [x] 멀티터치: 드래그를 시작한 터치 `identifier`를 추적(`_activeTouchId`)해 두 번째 손가락의 가로채기 방지.
 - [x] `MoveCommand.stockCount` 제거 (serialize/restore/SavedMove에서 정리, 하위호환 위해 필드는 optional 유지).
 - [x] `void cardH` / `void this._rafId` 등 noUnusedLocals 우회 코드 정리(`_rafId` 필드 제거, `_drawDragCards` 미사용 구조분해 제거).
+
+---
+
+## 2차 코드 리뷰 결과 (2026-07-19)
+
+1차 리뷰 수정분 + 교착 감지(a27fb9f) 반영 후 src/ 8개 파일(3,030줄) 재리뷰. `tsc --noEmit` 통과, dist/ 최신 상태 확인.
+
+### 발견된 버그 (전부 수정 완료)
+
+- [x] **1. 패배 처리 후에도 게임 입력이 계속 동작** — `GameState`에 `'fail'` 추가, `SolitaireGame.fail()` 신설. `_onFail()`이 `game.fail()`을 호출해 flipStock/moveCard/undo/드래그가 상태 검사만으로 전부 차단됨. `_undo`/`_flipStock`/`_handleMove`/`_handleAutoMove`/`_autoComplete`에 `_ended` 가드도 추가(다시하기 이펙트 대비 이중 방어). `undo()` 자체도 play/pause 외 상태를 거부.
+- [x] **2. 키보드 `N`이 확인 팝업 없이 즉시 새 게임** — `onNewGame` 콜백을 `_requestNewGame()`으로 연결. 진행 중(play/pause)이면 확인 팝업, 그 외(idle/win/fail)는 기존처럼 즉시 시작.
+- [x] **3. 승리/패배 오버레이 `setTimeout` 미취소** — `_overlayTimer` 필드로 핸들 저장, `_hideAllOverlays()`에서 취소. 새 게임/다시하기/이어하기 모두 `_hideAllOverlays()`를 거치므로 뒤늦은 오버레이 표시가 사라짐.
+- [x] **4. 수동 일시정지가 확인 팝업 취소로 강제 해제됨** — `_pausedByConfirm` 플래그 추가. `_pauseForConfirm()`이 직접 정지시킨 경우에만 `_dismissConfirm()`이 재개하고, 사용자가 걸어둔 일시정지는 유지.
+- [x] **5. 교착 판정이 승리 가능한 판을 자동 패배시킬 수 있음** — `hasAnyMove()`에 4단계(Foundation→태블로 1수 앞보기) 추가: Foundation 톱 카드를 받아줄 태블로가 있고, 내린 카드 위에 올릴 후보(반대 색·숫자-1)가 스톡∪웨이스트 또는 태블로 이동 가능 시퀀스에 존재하면 생산적 이동으로 인정. 노드 테스트로 오탐 해소(시나리오 A)·진짜 교착 유지(시나리오 C) 확인.
+- [x] **6. 다시하기 이펙트 재생 중 상태 보호 없음** — `_doRestart()` 진입 시 `_ended = true` 설정. 이펙트 중 Space 재개·Z 언두가 차단되고, pagehide 자동저장(saveNow)도 `_ended` 검사로 차단되어 파기한 판이 부활하지 않음. `_restartSameDeal()`이 `_ended = false`로 복원. 추가로 교착/포기(fail) 후에도 "다시 하기"로 같은 배열 재도전 가능하도록 `_requestRestart()`가 fail 상태를 허용.
+- [x] **7. 도움말(F1) 열림 중 입력·타이머 불일치** — `InputCallbacks.isModalOpen()` 추가(도움말/확인 팝업). keydown에서 모달 열림 시 F1/Esc 외 게임 키 차단, `_onPress`/dblclick에도 가드. 확인 팝업 중 F1 도움말 열기도 금지(`_toggleHelp` 가드).
+
+### 개선 권장 (선택)
+
+- [x] InputHandler에 "입력 허용 여부" 질의 콜백(모달 열림 / `_ended`)을 추가해 전역 키 차단을 한 곳으로 모으기 — 버그 7 수정에서 `isModalOpen()` 콜백으로, `_ended`는 main 핸들러 가드로 구현.
+- [x] 패배를 별도 게임 상태(`'fail'`)로 전이해 `_ended` 플래그 산재 제거 — 버그 1 수정에서 `'fail'` 상태 도입. (`_ended`는 다시하기 이펙트 구간 보호용으로 유지)
+- [ ] `StockDeck.drawCard()` 주석 수정 — "팝하지 않음"이라고 되어 있으나 실제로는 pop한다.
+- [ ] `restore()` 검증 실패 시 부분 복원된 덱이 인스턴스에 남음 — 현재는 호출측이 `_newGame()`으로 가리지만, 실패 경로에서 `_buildDecks()`로 되돌리는 방어 코드 권장.
+- [ ] 교착 자동 패배를 "이동 불가" 경고 토스트 + 포기 유도로 완화하는 옵션 검토 — 버그 5의 오판 리스크를 구조적으로 낮춤.

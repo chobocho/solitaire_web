@@ -14,6 +14,8 @@ export interface InputCallbacks {
   onAutoMove(from: DeckIndex): void;
   /** Esc 처리 우선순위: 도움말/확인 팝업이 열려 있으면 닫고 true 반환 */
   onEscapeModal(): boolean;
+  /** 도움말/확인 팝업이 열려 있는지 — 열려 있으면 게임 조작 키를 차단 (F1/Esc 제외) */
+  isModalOpen(): boolean;
 }
 
 export type { KeyboardSelectState } from './renderer.js';
@@ -119,6 +121,7 @@ export class InputHandler {
     // 더블클릭 자동 이동
     this.canvas.addEventListener('dblclick', e => {
       e.preventDefault();
+      if (this.cb.isModalOpen()) return;
       const deckIdx = this._getDeckAt(e.clientX - this.canvas.getBoundingClientRect().left,
                                       e.clientY - this.canvas.getBoundingClientRect().top);
       if (deckIdx !== null) this.cb.onAutoMove(deckIdx);
@@ -189,6 +192,9 @@ export class InputHandler {
       }
 
       const code = e.code;
+
+      // 도움말/확인 팝업이 열려 있으면 게임 조작 키 차단 — F1(도움말 토글)/Esc(닫기)만 통과
+      if (this.cb.isModalOpen() && code !== 'F1' && code !== 'Escape') return;
 
       if (!e.ctrlKey && !e.metaKey && !e.altKey && code in DECK_CODE_MAP) {
         e.preventDefault();
@@ -306,6 +312,7 @@ export class InputHandler {
 
   private _onPress(cx: number, cy: number): void {
     if (this.game.state !== 'play') return;
+    if (this.cb.isModalOpen()) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const x    = cx - rect.left;

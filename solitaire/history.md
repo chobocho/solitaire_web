@@ -1,5 +1,34 @@
 # 개발 이력
 
+## 2026-07-19 — 2차 리뷰 버그 7건 전부 수정
+
+### 변경
+- **`'fail'` 게임 상태 도입** (`solitaire.ts`) — `GameState`에 `'fail'` 추가, `fail()` 메서드 신설. `_onFail()`이 상태를 전이해 패배 후 flipStock/moveCard/undo/드래그가 상태 검사만으로 차단(버그 1). `undo()`도 play/pause 외 상태 거부.
+- **교착 판정 1수 앞보기** (`solitaire.ts` `hasAnyMove()` 4단계 추가) — Foundation 톱 카드를 태블로로 내렸을 때 그 위에 올릴 후보(반대 색·숫자-1)가 스톡∪웨이스트/태블로 시퀀스에 있으면 생산적 이동으로 인정. 승리 가능한 판의 자동 패배 오탐 해소(버그 5).
+- **모달 입력 차단** (`input.ts`) — `InputCallbacks.isModalOpen()` 추가. 도움말/확인 팝업 열림 시 F1/Esc 외 게임 키·드래그·더블클릭 차단(버그 7).
+- **컨트롤러 정리** (`main.ts`) —
+  - `N` 키를 `_requestNewGame()`에 연결해 확인 팝업 경유(버그 2)
+  - `_overlayTimer`로 승리/패배 오버레이 지연 표시를 `_hideAllOverlays()`에서 취소(버그 3)
+  - `_pausedByConfirm` 플래그로 확인 팝업 취소 시 수동 일시정지 유지(버그 4)
+  - `_doRestart()`에 `_ended = true` — 이펙트 중 조작·pagehide 재저장 차단(버그 6)
+  - `_requestRestart()`가 fail 상태 허용 — 교착/포기 후 같은 배열 재도전 가능
+  - `_undo`/`_flipStock`/`_handleMove`/`_handleAutoMove`/`_autoComplete`에 `_ended` 가드, `_togglePause`에 fail 차단, `_toggleHelp`에 확인 팝업 가드
+
+### 검증
+- `tsc` 빌드 통과(strict), `dist/` 재생성.
+- 노드 테스트 14건 전부 통과: Foundation→태블로 앞보기 오탐 해소(♥7→♠8 후 ♣6 수락) / 진짜 교착 유지(받아줄 검정 8 없음 → false) / fail 상태에서 flipStock·moveCard·moveFromWaste·autoMoveAll·undo·pause/resume 차단 / fail 후 restart()로 재시작 가능.
+- DOM 의존 항목(버그 2·3·4·6·7)은 코드 경로 추적으로 검증(브라우저 수동 테스트 권장).
+
+## 2026-07-19 — 2차 코드 리뷰 및 Todo.md 갱신
+
+### 범위
+- 1차 리뷰 수정분 + 교착 감지(a27fb9f) 반영 후 `src/` 8개 파일(3,030줄), `index.html` 재리뷰.
+- `tsc --noEmit` 통과, `dist/`가 소스와 동일 시각으로 최신임을 확인.
+
+### 결과 (Todo.md "2차 코드 리뷰 결과" 섹션에 기록)
+- **버그 7건 발견 (미수정)**: ① 패배 후 `game.state`가 `'play'`로 남아 키보드 입력 계속 동작, ② 키보드 `N`이 확인 팝업 없이 즉시 새 게임(`onNewGame`→`_newGame` 직결), ③ 승리/패배 오버레이 `setTimeout` 미취소로 새 판 위에 뒤늦게 표시, ④ 수동 일시정지가 확인 팝업 취소 시 강제 해제, ⑤ 교착 판정의 Foundation→태블로 일괄 제외로 승리 가능한 판을 자동 패배시킬 가능성, ⑥ 다시하기 이펙트 중 입력/저장 보호 없음(pagehide 시 파기한 판 부활), ⑦ 도움말 열림 중 키보드 플레이 가능 + 타이머 정지로 기록 왜곡.
+- **개선 권장 5건**: 입력 허용 질의 콜백 일원화, `'fail'` 상태 추가, `StockDeck.drawCard()` 주석 수정, `restore()` 실패 시 덱 초기화, 교착 자동 패배의 경고 완화 옵션.
+
 ## 2026-07-19 — 교착(더 이상 이동 불가) 자동 감지 추가
 
 ### 배경

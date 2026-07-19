@@ -89,6 +89,8 @@ export class InputHandler {
         // 더블클릭 자동 이동
         this.canvas.addEventListener('dblclick', e => {
             e.preventDefault();
+            if (this.cb.isModalOpen())
+                return;
             const deckIdx = this._getDeckAt(e.clientX - this.canvas.getBoundingClientRect().left, e.clientY - this.canvas.getBoundingClientRect().top);
             if (deckIdx !== null)
                 this.cb.onAutoMove(deckIdx);
@@ -154,6 +156,9 @@ export class InputHandler {
                 return;
             }
             const code = e.code;
+            // 도움말/확인 팝업이 열려 있으면 게임 조작 키 차단 — F1(도움말 토글)/Esc(닫기)만 통과
+            if (this.cb.isModalOpen() && code !== 'F1' && code !== 'Escape')
+                return;
             if (!e.ctrlKey && !e.metaKey && !e.altKey && code in DECK_CODE_MAP) {
                 e.preventDefault();
                 this._handleDeckKey(DECK_CODE_MAP[code]);
@@ -272,6 +277,8 @@ export class InputHandler {
     // ── 공통 처리 ────────────────────────────────────────────────────────────
     _onPress(cx, cy) {
         if (this.game.state !== 'play')
+            return;
+        if (this.cb.isModalOpen())
             return;
         const rect = this.canvas.getBoundingClientRect();
         const x = cx - rect.left;

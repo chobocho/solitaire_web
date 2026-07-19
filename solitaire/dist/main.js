@@ -12,15 +12,19 @@ class GameController {
         this.timerInterval = 0;
         this._saveTimer = 0;
         this._toastTimer = 0;
-        /** 게임 종료(승리/포기/교착) 후 중복 처리 방지 플래그 */
+        /** 승리/패배 오버레이 지연 표시 setTimeout 핸들 (새 게임 시 취소용) */
+        this._overlayTimer = 0;
+        /** 게임 종료(승리/포기/교착) 또는 다시하기 이펙트 중 조작 방지 플래그 */
         this._ended = false;
+        /** 확인 팝업이 직접 일시정지시킨 경우에만 취소 시 재개 (수동 일시정지 유지) */
+        this._pausedByConfirm = false;
         this.game = new SolitaireGame();
         this.sound = new SoundManager();
         this.storage = new GameStorage();
         this._setupDOM();
         this.renderer = new Renderer(this.canvas);
         this.input = new InputHandler(this.canvas, this.game, this.renderer, {
-            onNewGame: () => this._newGame(),
+            onNewGame: () => this._requestNewGame(),
             onUndo: () => this._undo(),
             onPause: () => this._togglePause(),
             onHelp: () => this._toggleHelp(),
@@ -28,6 +32,7 @@ class GameController {
             onMoveCard: (from, to, count) => this._handleMove(from, to, count),
             onAutoMove: (from) => this._handleAutoMove(from),
             onEscapeModal: () => this._handleEscapeModal(),
+            isModalOpen: () => this._isModalOpen(),
         });
     }
     // ── 초기화 ─────────────────────────────────────────────────────────────
@@ -217,15 +222,18 @@ class GameController {
         }, 1500);
     }
     // ── 게임 흐름 ───────────────────────────────────────────────────────────
-    /** 다시 하기 요청: 게임 진행 중이면 확인 팝업 */
+    /** 다시 하기 요청: 게임 진행 중이면 확인 팝업 (교착/포기 후에도 같은 배열 재도전 허용) */
     _requestRestart() {
-        if (this.game.state !== 'play' && this.game.state !== 'pause')
+        const st = this.game.state;
+        if (st !== 'play' && st !== 'pause' && st !== 'fail')
             return;
         this._pauseForConfirm();
         this.confirmRestartOverlay.classList.remove('hidden');
     }
     /** 다시 하기 실행: 전체 카드 불타는 이펙트 후 같은 배열로 재시작 */
     _doRestart() {
+        // 이펙트가 끝나 _restartSameDeal이 호출될 때까지 조작/자동저장 차단
+        this._ended = true;
         this._stopTimer();
         this.storage.clear();
         this.sound.play('lose');
@@ -267,23 +275,25 @@ class GameController {
         this._pauseForConfirm();
         this.confirmGiveupOverlay.classList.remove('hidden');
     }
-    /** 확인 팝업을 띄우기 전 게임을 일시정지 */
+    /** 확인 팝업을 띄우기 전 게임을 일시정지 (직접 정지시켰는지 기억) */
     _pauseForConfirm() {
-        if (this.game.state === 'play') {
+        this._pausedByConfirm = this.game.state === 'play';
+        if (this._pausedByConfirm) {
             this.game.pause();
             this._stopTimer();
             this.elPauseBtn.textContent = '▶ 계속';
         }
     }
-    /** 확인 팝업 취소: 숨기고, 게임이 pause면 재개 */
+    /** 확인 팝업 취소: 숨기고, 팝업이 직접 일시정지시킨 경우에만 재개 */
     _dismissConfirm(overlay) {
         overlay.classList.add('hidden');
-        if (this.game.state === 'pause') {
+        if (this._pausedByConfirm && this.game.state === 'pause') {
             this.game.resume();
             this._startTimer();
             this.pauseOverlay.classList.add('hidden');
             this.elPauseBtn.textContent = '⏸ 일시정지';
         }
+        this._pausedByConfirm = false;
     }
     _newGame() {
         // 키보드(N)로 시작하는 경우에도 소리가 나도록 사운드 초기화 (사용자 제스처 내)
@@ -299,7 +309,9 @@ class GameController {
         this._scheduleSave();
     }
     _undo() {
-        // 승리/미시작 상태에서는 undo 차단 (승리 처리 후 상태 불일치 방지)
+        // 종료/이펙트 중이거나 승리·미시작 상태에서는 undo 차단 (상태 불일치 방지)
+        if (this._ended)
+            return;
         if (this.game.state !== 'play' && this.game.state !== 'pause')
             return;
         if (!this.game.canUndo)
@@ -310,6 +322,8 @@ class GameController {
         this._scheduleSave();
     }
     _flipStock() {
+        if (this._ended)
+            return;
         if (this.game.state !== 'play')
             return;
         const ok = this.game.flipStock();
@@ -343,10 +357,15 @@ class GameController {
             || !this.confirmGiveupOverlay.classList.contains('hidden')
             || !this.confirmRestartOverlay.classList.contains('hidden');
     }
+    /** 도움말 또는 확인 팝업이 열려 있는지 (입력 차단용) */
+    _isModalOpen() {
+        return !this.helpOverlay.classList.contains('hidden') || this._anyConfirmOpen();
+    }
     _togglePause() {
         if (this._ended)
             return;
-        if (this.game.state === 'idle' || this.game.state === 'win')
+        const st = this.game.state;
+        if (st === 'idle' || st === 'win' || st === 'fail')
             return;
         // 확인 팝업이 떠 있는 동안에는 일시정지 토글 금지 (팝업 뒤 상태 꼬임 방지)
         if (this._anyConfirmOpen())
@@ -367,6 +386,8 @@ class GameController {
         }
     }
     _handleMove(from, to, count) {
+        if (this._ended)
+            return false;
         let ok;
         if (from === DeckIndex.Waste) {
             ok = this.game.moveFromWaste(to);
@@ -389,6 +410,8 @@ class GameController {
         return ok;
     }
     _handleAutoMove(from) {
+        if (this._ended)
+            return;
         const ok = this.game.autoMoveToFoundation(from);
         if (ok) {
             this.sound.play('card_place');
@@ -401,6 +424,8 @@ class GameController {
         }
     }
     _autoComplete() {
+        if (this._ended)
+            return;
         if (this.game.state !== 'play')
             return;
         const moved = this.game.autoMoveAll();
@@ -423,13 +448,15 @@ class GameController {
         this.renderer.startWinEffect(this.game);
         this.elWinMoves.textContent = String(this.game.moveCount);
         this.elWinTime.textContent = this._formatTime(this.elapsed);
-        setTimeout(() => {
+        this._overlayTimer = window.setTimeout(() => {
             this.winOverlay.classList.remove('hidden');
         }, 2000);
     }
     /** 패배 이펙트 (포기 또는 교착) */
     _onFail(reason = 'giveup') {
         this._ended = true;
+        // 상태를 fail로 전이해 키보드/드래그 등 모든 조작 API를 차단
+        this.game.fail();
         this.elFailMsg.textContent = reason === 'deadlock'
             ? '더 이상 이동할 수 없습니다.'
             : '게임을 포기했습니다.';
@@ -442,7 +469,7 @@ class GameController {
         this.storage.clear();
         this.sound.play('lose');
         this.renderer.startFailEffect(this.game);
-        setTimeout(() => {
+        this._overlayTimer = window.setTimeout(() => {
             this.failOverlay.classList.remove('hidden');
         }, 2500);
     }
@@ -465,6 +492,11 @@ class GameController {
         this.elStockCount.textContent = String(stockSize);
     }
     _hideAllOverlays() {
+        // 예약된 승리/패배 오버레이 지연 표시 취소 (새 게임 위에 뒤늦게 뜨는 것 방지)
+        if (this._overlayTimer) {
+            clearTimeout(this._overlayTimer);
+            this._overlayTimer = 0;
+        }
         this.startOverlay.classList.add('hidden');
         this.pauseOverlay.classList.add('hidden');
         this.winOverlay.classList.add('hidden');
@@ -476,6 +508,9 @@ class GameController {
         this.elPauseBtn.textContent = '⏸ 일시정지';
     }
     _toggleHelp() {
+        // 확인 팝업이 떠 있는 동안에는 도움말 토글 금지
+        if (this._anyConfirmOpen())
+            return;
         const isOpen = !this.helpOverlay.classList.contains('hidden');
         if (isOpen) {
             this.helpOverlay.classList.add('hidden');

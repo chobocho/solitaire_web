@@ -266,10 +266,12 @@ export class SolitaireGame {
      *     언젠가 웨이스트 맨 위로 올라와 이동 후보가 된다)
      *  - 태블로의 유효 시퀀스 → 다른 태블로
      *
+     *  - Foundation → 태블로 내리기가 곧바로 후속 이동을 여는 경우 (1수 앞보기)
+     *
      * 의도적으로 제외(되돌릴 수 있어 비생산적 → 무한 루프 방지):
      *  - 스톡 순환(flipStock) 자체
      *  - 컬럼 전체(바닥 카드)를 빈 컬럼으로 옮기는 King 셔플
-     *  - Foundation → 태블로 되돌리기
+     *  - 후속 수로 이어지지 않는 단순 Foundation → 태블로 되돌리기
      *
      * @returns 이동 가능한 수가 있으면 true. false면 교착.
      */
@@ -324,6 +326,37 @@ export class SolitaireGame {
                 }
             }
         }
+        // 4) Foundation → 태블로 내리기가 곧바로 후속 이동을 여는 경우 (1수 앞보기)
+        //    예: Foundation의 ♥7을 태블로 ♠8 위로 내리면 다른 열의 ♣6 시퀀스를 받을 수 있다.
+        //    내린 카드 위에 올릴 후보(반대 색·숫자-1)가 스톡∪웨이스트 또는 태블로의
+        //    이동 가능한 시퀀스 안에 있어야 생산적으로 인정한다.
+        for (let fi = DeckIndex.Found1; fi <= DeckIndex.Found4; fi++) {
+            const f = this._decks[fi].top();
+            if (!f)
+                continue;
+            // f를 규칙상 받아줄 태블로가 하나라도 있어야 함
+            let accepted = false;
+            for (let t = DeckIndex.Tab1; t <= DeckIndex.Tab7; t++) {
+                if (this._tableauAcceptsRule(this._decks[t], f)) {
+                    accepted = true;
+                    break;
+                }
+            }
+            if (!accepted)
+                continue;
+            const fitsOnF = (c) => c.color !== f.color && c.number === f.number - 1;
+            if (pileCards.some(fitsOnF))
+                return true;
+            for (let from = DeckIndex.Tab1; from <= DeckIndex.Tab7; from++) {
+                const src = this._decks[from];
+                const size = src.size();
+                const seqLen = src.sequenceLength();
+                for (let k = 0; k < seqLen; k++) {
+                    if (fitsOnF(src.get(size - 1 - k)))
+                        return true;
+                }
+            }
+        }
         return false;
     }
     /**
@@ -340,6 +373,9 @@ export class SolitaireGame {
     }
     // ── Undo ─────────────────────────────────────────────────────────────────
     undo() {
+        // 승리/패배 확정 후에는 되돌리기 불가 (상태 불일치 방지)
+        if (this._state !== 'play' && this._state !== 'pause')
+            return false;
         if (this._history.length === 0)
             return false;
         const cmd = this._history.pop();
@@ -382,8 +418,6 @@ export class SolitaireGame {
             fromDeck.pushMany(cards);
         }
         this._moveCount = Math.max(0, this._moveCount - 1);
-        if (this._state === 'win')
-            this._state = 'play';
         return true;
     }
     // ── 일시정지 / 재개 ──────────────────────────────────────────────────────
@@ -391,6 +425,11 @@ export class SolitaireGame {
         this._state = 'pause'; }
     resume() { if (this._state === 'pause')
         this._state = 'play'; }
+    /** 패배 확정(포기/교착): 이후 flipStock/moveCard/undo 등 조작 API가 모두 차단된다 */
+    fail() {
+        if (this._state === 'play' || this._state === 'pause')
+            this._state = 'fail';
+    }
     // ── 승리 판정 ────────────────────────────────────────────────────────────
     _checkWin() {
         for (let i = DeckIndex.Found1; i <= DeckIndex.Found4; i++) {
