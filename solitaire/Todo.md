@@ -52,21 +52,21 @@ src/ 전체 8개 파일(2,738줄), index.html, tsconfig.json 리뷰 기준.
 
 ### 발견된 버그 (수정 필요)
 
-- [ ] **1. "다시 하기"가 같은 카드 배열로 재시작되지 않음** — 확인 팝업 문구는 "같은 카드 배열로 다시 시작"(index.html:117)이지만, `_doRestart`(main.ts:264)는 `_newGame()` → `deal()`로 새로 셔플함. 게임 시작 시 초기 배치 스냅샷을 저장해 두었다가 복원해야 함.
-- [ ] **2. Esc로 도움말이 닫히지 않음** — 닫기 버튼 문구는 "닫기 (F1 / Esc)"(index.html:202)인데, input.ts:190 Escape 처리에 도움말 분기가 없어 대신 일시정지가 토글됨.
-- [ ] **3. N 키로 첫 게임 시작 시 사운드 전체 무음** — `sound.init()`이 시작/이어하기 버튼 클릭(main.ts:114,119)에서만 호출됨. 페이지 로드 직후 N 키로 시작하면 게임 내내 소리가 나지 않음.
-- [ ] **4. 한글 IME 상태에서 단축키 동작 안 함** — input.ts가 `e.key`를 사용하므로 한/영 전환 시 'z'가 'ㅈ', 's'가 'ㄴ'으로 들어와 매핑 실패. `e.code`(KeyZ, KeyS, Digit1…) 기반으로 변경 필요.
-- [ ] **5. 키보드 이동이 전체 시퀀스만 시도** — `_kbMovableCount`(input.ts:243)가 항상 `sequenceLength()` 전체를 반환. 예: 9-8-7 시퀀스에서 7만 다른 8 위로 옮기는 것이 키보드로는 불가능(마우스 드래그로는 가능). count를 줄여가며 수락 가능한 개수를 찾아야 함(요구사항 13 저해).
-- [ ] **6. 웨이스트 더블클릭 히트 영역 어긋남** — 웨이스트 맨 위 카드는 최대 +36px 오프셋으로 그려지는데(renderer.ts:201), 더블클릭용 `_getDeckAt`(input.ts:426)은 기본 위치 1장 영역만 검사. 카드 오른쪽 부분을 더블클릭하면 자동이동이 실패함.
-- [ ] **7. 승리 후 Z(undo) 시 상태 불일치** — `undo()`가 state를 'win'→'play'로 되돌리지만(solitaire.ts:302), main.ts는 이미 저장 삭제·타이머 정지·승리 오버레이 표시를 마친 상태. 승리 후에는 undo를 차단하는 것이 안전.
-- [ ] **8. 확인 팝업 위에서 Esc 시 팝업 뒤 상태 꼬임** — 새게임/포기/다시하기 확인 팝업이 떠 있는 동안 Esc를 누르면 `_togglePause`가 실행되어 팝업은 남은 채 게임이 재개되고 타이머가 다시 돎.
-- [ ] **9. 이펙트 재생 중 카드 이중 표시** — 승리/패배/다시하기 이펙트는 카드 복사본을 날리는데, 보드의 원본 카드도 계속 그려져(renderer.ts render → _drawBoard) 카드가 복제된 것처럼 보임. 이펙트 중에는 해당 덱 렌더링을 생략해야 함.
-- [ ] **10. 애니메이션이 프레임레이트 종속** — `elapsed += 0.016` 고정(renderer.ts:547,607)이라 120Hz 화면에서 2배속 재생됨. requestAnimationFrame 타임스탬프 기반 dt로 변경 필요.
+- [x] **1. "다시 하기"가 같은 카드 배열로 재시작되지 않음** — `deal()`에서 초기 배치를 `_initialDeal` 스냅샷으로 저장하고 `restart()` 추가. `_doRestart`는 이펙트 후 `_restartSameDeal()`로 동일 배열 복원. 스냅샷은 IndexedDB에도 저장(`initialDeal`)해 이어하기 후에도 동작.
+- [x] **2. Esc로 도움말이 닫히지 않음** — `onEscapeModal` 콜백 추가. Esc 시 도움말/확인 팝업을 먼저 닫도록 우선 처리(main.ts `_handleEscapeModal`).
+- [x] **3. N 키로 첫 게임 시작 시 사운드 전체 무음** — `_newGame()`에서 `sound.init()` 호출(키다운 제스처 내). `_restartSameDeal`에도 추가.
+- [x] **4. 한글 IME 상태에서 단축키 동작 안 함** — 키 매핑을 `e.key`→`e.code`(KeyS, KeyZ, Digit1…)로 변경. Numpad1~7도 지원.
+- [x] **5. 키보드 이동이 전체 시퀀스만 시도** — `_kbMovableCount`가 시퀀스 전체→1장까지 줄여가며 목적지가 수락하는 최대 개수를 찾도록 변경.
+- [x] **6. 웨이스트 더블클릭 히트 영역 어긋남** — `_getDeckAt`의 웨이스트 판정 폭을 fan-out 오프셋만큼 확장.
+- [x] **7. 승리 후 Z(undo) 시 상태 불일치** — `_undo()`가 state가 play/pause일 때만 동작하도록 차단.
+- [x] **8. 확인 팝업 위에서 Esc 시 팝업 뒤 상태 꼬임** — Esc가 팝업을 먼저 닫음(#2). 추가로 확인 팝업이 열려 있으면 `_togglePause` 무시.
+- [x] **9. 이펙트 재생 중 카드 이중 표시** — 애니메이션 중인 덱을 `_animDecks`로 추적, `_drawBoard`에서 해당 덱 카드 렌더링 생략.
+- [x] **10. 애니메이션이 프레임레이트 종속** — `performance.now()` 기반 dt로 물리 스텝을 스케일(60fps 기준), dt 클램프(0.05s)로 폭주 방지.
 
 ### 개선 권장 (선택)
 
-- [ ] iOS Safari 대응: `play()` 시 AudioContext가 suspended면 `ctx.resume()` 호출 (sound.ts:29)
-- [ ] `restore()`에 스냅샷 무결성 검증 없음 — 카드 52장/중복 여부 확인 후 실패 시 null 반환 (solitaire.ts:351)
-- [ ] 멀티터치: `changedTouches[0]`만 사용해 두 번째 손가락이 드래그를 가로챌 수 있음 — 터치 identifier 추적 권장 (input.ts:121)
-- [ ] `MoveCommand.stockCount`는 기록만 하고 어디서도 사용하지 않음 — 제거 가능 (solitaire.ts:22)
-- [ ] `void cardH` / `void this._rafId` 등 noUnusedLocals 우회 코드 정리 (renderer.ts:270, main.ts:501)
+- [x] iOS Safari 대응: `init()`/`play()`에서 AudioContext가 suspended면 `ctx.resume()` 호출.
+- [x] `restore()`에 스냅샷 무결성 검증 추가 — `_validateDecks()`로 52장/중복 확인 후 실패 시 null 반환.
+- [x] 멀티터치: 드래그를 시작한 터치 `identifier`를 추적(`_activeTouchId`)해 두 번째 손가락의 가로채기 방지.
+- [x] `MoveCommand.stockCount` 제거 (serialize/restore/SavedMove에서 정리, 하위호환 위해 필드는 optional 유지).
+- [x] `void cardH` / `void this._rafId` 등 noUnusedLocals 우회 코드 정리(`_rafId` 필드 제거, `_drawDragCards` 미사용 구조분해 제거).

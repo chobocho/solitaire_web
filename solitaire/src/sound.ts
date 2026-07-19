@@ -15,6 +15,10 @@ export class SoundManager {
     if (this._initialized) return;
     try {
       this.ctx = new AudioContext();
+      // iOS Safari 등: 사용자 제스처 안에서 생성해도 suspended 로 시작할 수 있음
+      if (this.ctx.state === 'suspended') {
+        await this.ctx.resume().catch(() => {});
+      }
       await this._generateSounds();
       this._initialized = true;
     } catch (e) {
@@ -30,6 +34,11 @@ export class SoundManager {
     if (this._muted || !this.ctx || !this._initialized) return;
     const buffer = this.buffers.get(name);
     if (!buffer) return;
+
+    // iOS Safari: 탭 전환 등으로 suspended 되면 재개
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
 
     try {
       const source = this.ctx.createBufferSource();
