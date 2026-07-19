@@ -29,6 +29,7 @@ class GameController {
   private pauseOverlay!:   HTMLElement;
   private winOverlay!:     HTMLElement;
   private failOverlay!:         HTMLElement;
+  private elFailMsg!:           HTMLElement;
   private helpOverlay!:         HTMLElement;
   private confirmNewOverlay!:     HTMLElement;
   private confirmGiveupOverlay!:  HTMLElement;
@@ -42,6 +43,8 @@ class GameController {
 
   private _saveTimer:  number = 0;
   private _toastTimer: number = 0;
+  /** 게임 종료(승리/포기/교착) 후 중복 처리 방지 플래그 */
+  private _ended: boolean = false;
 
   constructor() {
     this.game    = new SolitaireGame();
@@ -89,6 +92,7 @@ class GameController {
     this.pauseOverlay = req('pause-overlay');
     this.winOverlay   = req('win-overlay');
     this.failOverlay  = req('fail-overlay');
+    this.elFailMsg    = req('fail-msg');
     this.helpOverlay  = req('help-overlay');
     this.elWinMoves   = req('win-moves');
     this.elWinTime    = req('win-time');
@@ -183,6 +187,7 @@ class GameController {
 
   private _bindPageHide(): void {
     const saveNow = () => {
+      if (this._ended) return;
       if (this.game.state === 'play' || this.game.state === 'pause') {
         const snap = this.game.serialize(this.elapsed);
         this.storage.save(snap);
@@ -222,6 +227,7 @@ class GameController {
       return;
     }
 
+    this._ended = false;
     this.elapsed = restoredElapsed;
     this._hideAllOverlays();
     this._updateUI();
@@ -235,7 +241,7 @@ class GameController {
   private _scheduleSave(): void {
     if (this._saveTimer) clearTimeout(this._saveTimer);
     this._saveTimer = window.setTimeout(async () => {
-      if (this.game.state === 'play' || this.game.state === 'pause') {
+      if (!this._ended && (this.game.state === 'play' || this.game.state === 'pause')) {
         const snap = this.game.serialize(this.elapsed);
         await this.storage.save(snap);
         this._showSaveToast();
@@ -277,6 +283,7 @@ class GameController {
     this._stopTimer();
     const ok = this.game.restart();
     if (!ok) { this._newGame(); return; }
+    this._ended = false;
     void this.sound.init();
     this.elapsed = 0;
     this._startTimer();
@@ -325,6 +332,7 @@ class GameController {
   private _newGame(): void {
     // 키보드(N)로 시작하는 경우에도 소리가 나도록 사운드 초기화 (사용자 제스처 내)
     void this.sound.init();
+    this._ended = false;
     this._stopTimer();
     this.storage.clear();
     this.game.deal();
@@ -352,6 +360,7 @@ class GameController {
       this.sound.play('card_flip');
       this._updateUI();
       this._scheduleSave();
+      this._checkDeadlock();
     }
   }
 
@@ -381,6 +390,7 @@ class GameController {
   }
 
   private _togglePause(): void {
+    if (this._ended) return;
     if (this.game.state === 'idle' || this.game.state === 'win') return;
     // 확인 팝업이 떠 있는 동안에는 일시정지 토글 금지 (팝업 뒤 상태 꼬임 방지)
     if (this._anyConfirmOpen()) return;
@@ -414,6 +424,7 @@ class GameController {
       this._updateUI();
       this._scheduleSave();
       if (this.game.state === 'win') this._onWin();
+      else this._checkDeadlock();
     } else {
       this.sound.play('invalid');
     }
@@ -427,6 +438,7 @@ class GameController {
       this._updateUI();
       this._scheduleSave();
       if (this.game.state === 'win') this._onWin();
+      else this._checkDeadlock();
     }
   }
 
@@ -439,10 +451,12 @@ class GameController {
       this._scheduleSave();
       const st = this.game.state as string;
       if (st === 'win') this._onWin();
+      else this._checkDeadlock();
     }
   }
 
   private _onWin(): void {
+    this._ended = true;
     this._stopTimer();
     this.storage.clear();
     this.sound.play('win');
@@ -456,9 +470,15 @@ class GameController {
     }, 2000);
   }
 
-  /** 패배(포기) 이펙트 */
-  private _onFail(): void {
+  /** 패배 이펙트 (포기 또는 교착) */
+  private _onFail(reason: 'giveup' | 'deadlock' = 'giveup'): void {
+    this._ended = true;
+    this.elFailMsg.textContent = reason === 'deadlock'
+      ? '더 이상 이동할 수 없습니다.'
+      : '게임을 포기했습니다.';
     this._stopTimer();
+    // 종료 직전 예약된 자동저장이 storage.clear() 이후 죽은 판을 재저장하지 않도록 취소
+    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = 0; }
     this.storage.clear();
     this.sound.play('lose');
     this.renderer.startFailEffect(this.game);
@@ -466,6 +486,15 @@ class GameController {
     setTimeout(() => {
       this.failOverlay.classList.remove('hidden');
     }, 2500);
+  }
+
+  /** 이동 후 교착(더 이상 둘 수 없음) 검사 → 자동 게임 종료 */
+  private _checkDeadlock(): void {
+    if (this._ended) return;
+    if (this.game.state !== 'play') return;
+    if (!this.game.hasAnyMove()) {
+      this._onFail('deadlock');
+    }
   }
 
   // ── UI 업데이트 ─────────────────────────────────────────────────────────

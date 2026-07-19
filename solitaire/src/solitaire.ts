@@ -290,6 +290,88 @@ export class SolitaireGame {
     return moved;
   }
 
+  // ── 교착(더 이상 이동 불가) 판정 ─────────────────────────────────────────
+
+  /**
+   * 현재 판에 "생산적인" 이동이 하나라도 가능한지 검사한다.
+   *
+   * 판정에 포함하는 이동:
+   *  - 태블로 맨 위 카드 → Foundation
+   *  - 스톡 ∪ 웨이스트의 모든 카드 → Foundation 또는 태블로
+   *    (드로우 1장 + 무한 재순환이므로 스톡/웨이스트의 모든 카드는
+   *     언젠가 웨이스트 맨 위로 올라와 이동 후보가 된다)
+   *  - 태블로의 유효 시퀀스 → 다른 태블로
+   *
+   * 의도적으로 제외(되돌릴 수 있어 비생산적 → 무한 루프 방지):
+   *  - 스톡 순환(flipStock) 자체
+   *  - 컬럼 전체(바닥 카드)를 빈 컬럼으로 옮기는 King 셔플
+   *  - Foundation → 태블로 되돌리기
+   *
+   * @returns 이동 가능한 수가 있으면 true. false면 교착.
+   */
+  hasAnyMove(): boolean {
+    if (this._state !== 'play') return false;
+
+    const foundations: FoundationDeck[] = [];
+    for (let i = DeckIndex.Found1; i <= DeckIndex.Found4; i++) {
+      foundations.push(this._decks[i] as FoundationDeck);
+    }
+    const acceptedByFoundation = (card: Card): boolean =>
+      foundations.some(f => f.canAccept(card));
+
+    // 1) 태블로 맨 위 → Foundation
+    for (let i = DeckIndex.Tab1; i <= DeckIndex.Tab7; i++) {
+      const top = this._decks[i].top();
+      if (top && top.isOpen && acceptedByFoundation(top)) return true;
+    }
+
+    // 2) 스톡 ∪ 웨이스트의 모든 카드 → Foundation 또는 태블로
+    const pileCards: Card[] = [
+      ...this._decks[DeckIndex.Stock].toArray(),
+      ...this._decks[DeckIndex.Waste].toArray(),
+    ];
+    for (const card of pileCards) {
+      if (acceptedByFoundation(card)) return true;
+      for (let i = DeckIndex.Tab1; i <= DeckIndex.Tab7; i++) {
+        if (this._tableauAcceptsRule(this._decks[i] as TableauDeck, card)) return true;
+      }
+    }
+
+    // 3) 태블로 → 태블로 (유효 시퀀스 이동)
+    for (let from = DeckIndex.Tab1; from <= DeckIndex.Tab7; from++) {
+      const src = this._decks[from] as TableauDeck;
+      if (src.isEmpty()) continue;
+      const size = src.size();
+      const seqLen = src.sequenceLength();
+      // 맨 위에서 이어지는 유효 시퀀스 안의 각 카드가 이동 그룹의 바닥이 될 수 있다
+      for (let k = 0; k < seqLen; k++) {
+        const baseIdx = size - 1 - k;
+        const base = src.get(baseIdx);
+        for (let to = DeckIndex.Tab1; to <= DeckIndex.Tab7; to++) {
+          if (to === from) continue;
+          const dst = this._decks[to] as TableauDeck;
+          if (!this._tableauAcceptsRule(dst, base)) continue;
+          // 컬럼 전체를 빈 컬럼으로 옮기는 King 셔플은 비생산적 → 제외
+          if (baseIdx === 0 && dst.isEmpty()) continue;
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 태블로 수락 규칙 판정 (canAccept와 달리 들어올 카드의 open 상태는 무시).
+   * 스톡의 뒤집힌 카드도 웨이스트로 올라오면 앞면이 되므로 카드 정체성으로 판정한다.
+   */
+  private _tableauAcceptsRule(deck: TableauDeck, card: Card): boolean {
+    if (deck.isEmpty()) return card.number === CardNumber.King;
+    const top = deck.top()!;
+    if (!top.isOpen) return false;
+    return top.color !== card.color && card.number === top.number - 1;
+  }
+
   // ── Undo ─────────────────────────────────────────────────────────────────
 
   undo(): boolean {
