@@ -1,5 +1,33 @@
 # 개발 이력
 
+## 2026-07-19 — 전체 코드 리뷰 및 Todo.md 갱신
+
+- src/ 전체 8개 파일(2,738줄) + index.html 코드 리뷰 수행
+- 요구사항 17개 충족 현황 점검: 15개 충족, 2개 부분 충족(키보드 부분 시퀀스 이동, F1 도움말 Esc 닫기)
+- 버그 10건 발견하여 Todo.md에 체크리스트로 기록
+  - 주요: "다시 하기"가 같은 배열로 재시작되지 않음, 한글 IME에서 단축키 미동작, N 키 시작 시 무음
+- 개선 권장 5건 추가 (iOS AudioContext resume, 스냅샷 검증, 멀티터치 등)
+- 코드 수정은 하지 않음 (리뷰만 수행)
+
+## 2026-07-19 — 단일 파일 릴리스 빌드
+
+### 작업 내용
+`build.sh` / `build.bat`를 단일 자체 완결형 `index.html` 하나만 생성하도록 변경.
+CSS·JS 번들·favicon·모든 이미지(70개 PNG)를 data URI로 인라인하여 외부 파일 의존 제거.
+
+### 변경/추가된 파일
+| 파일 | 설명 |
+|------|------|
+| `build.sh` | tsc 타입체크 → esbuild IIFE 번들 → 인라인 → `release/index.html` |
+| `build.bat` | 위와 동일 흐름의 Windows 버전 |
+| `build-inline.cjs` | CSS/JS/favicon/이미지 인라인 공유 스크립트 (sh·bat 공용) |
+
+### 방식
+- `esbuild`로 `src/main.ts` + 모든 모듈을 단일 IIFE로 번들
+- `img/` 전체를 base64 data URI 맵(`globalThis.__IMG__`)으로 임베드
+- `loadImages()`가 파일 대신 임베드된 data URI를 우선 사용하도록 번들 패치
+- 결과: `release/index.html` (약 898KB), 외부 참조 0개 — 파일 하나로 실행
+
 ## 2026-04-11 — 초기 구현 (v1.0)
 
 ### 작업 내용
