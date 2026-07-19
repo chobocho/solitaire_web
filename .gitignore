@@ -10,5 +10,8 @@ Thumbs.db
 # Node (빌드 환경)
 node_modules/
 
+# Script
+upload.sh
+
 # 릴리즈 빌드 출력
 solitaire/release/
