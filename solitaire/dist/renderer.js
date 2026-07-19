@@ -55,6 +55,10 @@ export class Renderer {
         this._winAnimCards = [];
         this._failAnimCards = [];
         this._animActive = false;
+        /** 현재 이펙트로 날아가는 중인 덱들 — 보드에는 그리지 않아 이중 표시 방지 */
+        this._animDecks = new Set();
+        /** 프레임레이트 독립 애니메이션용 이전 프레임 타임스탬프(ms) */
+        this._lastFrameTime = 0;
         this._restartOnComplete = null;
         this.ctx = canvas.getContext('2d');
         this.layout = calcLayout(canvas.clientWidth, canvas.clientHeight);
@@ -91,12 +95,21 @@ export class Renderer {
         if (kbState.ctrlHeld) {
             this._drawKeyOverlay(game);
         }
-        // 애니메이션
+        // 애니메이션 (프레임레이트 독립: 실제 경과 시간 dt 사용)
         if (this._animActive) {
+            const now = performance.now();
+            let dt = this._lastFrameTime ? (now - this._lastFrameTime) / 1000 : 1 / 60;
+            this._lastFrameTime = now;
+            // 탭 비활성화 등으로 프레임이 크게 벌어지면 클램프 (물리 폭주 방지)
+            if (dt > 0.05)
+                dt = 0.05;
             if (this._winAnimCards.length > 0)
-                this._stepWinAnim();
+                this._stepWinAnim(dt);
             if (this._failAnimCards.length > 0)
-                this._stepFailAnim();
+                this._stepFailAnim(dt);
+        }
+        else {
+            this._lastFrameTime = 0;
         }
     }
     _drawBoard(game, drag, kbState) {
@@ -105,7 +118,10 @@ export class Renderer {
         // ── 스톡 ──────────────────────────────────────────────────────────
         this._drawSlotBackground(L.stockX, L.topRowY, cardW, cardH, '↩');
         const stock = game.getDeck(DeckIndex.Stock);
-        if (!stock.isEmpty()) {
+        if (this._isDeckAnimating(DeckIndex.Stock)) {
+            // 이펙트 중: 카드는 애니메이션으로만 표시 (슬롯 배경만 유지)
+        }
+        else if (!stock.isEmpty()) {
             // 뒤집힌 카드 더미 표시 (최대 3장 겹쳐 보이게)
             const depth = Math.min(3, stock.size());
             for (let i = depth - 1; i >= 0; i--) {
@@ -119,7 +135,7 @@ export class Renderer {
         // ── 웨이스트 ──────────────────────────────────────────────────────
         this._drawSlotBackground(L.wasteX, L.topRowY, cardW, cardH, '');
         const waste = game.getDeck(DeckIndex.Waste);
-        if (!waste.isEmpty()) {
+        if (!waste.isEmpty() && !this._isDeckAnimating(DeckIndex.Waste)) {
             // 맨 위 3장을 살짝 겹쳐 보이게
             const showCount = Math.min(3, waste.size());
             for (let i = 0; i < showCount; i++) {
@@ -139,7 +155,7 @@ export class Renderer {
             const fx = L.foundX[i];
             this._drawSlotBackground(fx, L.topRowY, cardW, cardH, foundLabels[i]);
             const deck = game.getDeck(fi);
-            if (!deck.isEmpty()) {
+            if (!deck.isEmpty() && !this._isDeckAnimating(fi)) {
                 this._drawCard(deck.top(), fx, L.topRowY, true);
             }
             if (kbState.selectedDeck === fi) {
@@ -152,22 +168,25 @@ export class Renderer {
             const tx = L.tabX[col];
             this._drawSlotBackground(tx, L.tableauY, cardW, cardH, '');
             const deck = game.getDeck(ti);
-            let y = L.tableauY;
-            for (let ci = 0; ci < deck.size(); ci++) {
-                const card = deck.get(ci);
-                const isDragCard = drag.isDragging && drag.fromDeck === ti &&
-                    ci >= deck.size() - drag.cards.length;
-                if (!isDragCard) {
-                    this._drawCard(card, tx, y, card.isOpen);
+            // 이펙트 중인 태블로 열은 카드 생략 (애니메이션 카드와 이중 표시 방지)
+            if (!this._isDeckAnimating(ti)) {
+                let y = L.tableauY;
+                for (let ci = 0; ci < deck.size(); ci++) {
+                    const card = deck.get(ci);
+                    const isDragCard = drag.isDragging && drag.fromDeck === ti &&
+                        ci >= deck.size() - drag.cards.length;
+                    if (!isDragCard) {
+                        this._drawCard(card, tx, y, card.isOpen);
+                    }
+                    else {
+                        // 드래그 중인 자리는 투명하게
+                        this.ctx.save();
+                        this.ctx.globalAlpha = 0.25;
+                        this._drawCard(card, tx, y, card.isOpen);
+                        this.ctx.restore();
+                    }
+                    y += card.isOpen ? L.stackGap : L.stackGapClosed;
                 }
-                else {
-                    // 드래그 중인 자리는 투명하게
-                    this.ctx.save();
-                    this.ctx.globalAlpha = 0.25;
-                    this._drawCard(card, tx, y, card.isOpen);
-                    this.ctx.restore();
-                }
-                y += card.isOpen ? L.stackGap : L.stackGapClosed;
             }
             if (kbState.selectedDeck === ti) {
                 const h = Math.max(cardH, this.getDeckBottomY(ti, game) - L.tableauY);
@@ -179,17 +198,17 @@ export class Renderer {
             this._drawSelectHighlight(L.wasteX, L.topRowY, cardW, cardH);
         }
     }
+    _isDeckAnimating(di) {
+        return this._animActive && this._animDecks.has(di);
+    }
     _drawDragCards(drag) {
         const L = this.layout;
-        const { cardW, cardH } = L;
         let y = drag.y - drag.offsetY;
         const x = drag.x - drag.offsetX;
         for (const card of drag.cards) {
             this._drawCard(card, x, y, true);
             y += L.stackGap;
         }
-        void cardH;
-        void cardW;
     }
     // ─── 카드 그리기 ──────────────────────────────────────────────────────
     _drawCard(card, x, y, open) {
@@ -416,6 +435,7 @@ export class Renderer {
         this._winAnimCards = [];
         const { cardW, cardH } = this.layout;
         for (let di = DeckIndex.Found1; di <= DeckIndex.Found4; di++) {
+            this._animDecks.add(di);
             const deck = game.getDeck(di);
             for (let ci = 0; ci < deck.size(); ci++) {
                 const rect = this.getCardRect(di, ci, game);
@@ -435,18 +455,19 @@ export class Renderer {
         }
         this._animActive = true;
     }
-    _stepWinAnim() {
+    _stepWinAnim(dt) {
         const { ctx } = this;
         const H = this.canvas.clientHeight;
         const G = 0.4;
+        const k = dt * 60; // 60fps 기준 물리 스텝 스케일
         for (const c of this._winAnimCards) {
-            c.elapsed += 0.016;
+            c.elapsed += dt;
             if (c.elapsed < c.delay)
                 continue;
-            c.vy += G;
-            c.x += c.vx;
-            c.y += c.vy;
-            c.angle += c.vAngle;
+            c.vy += G * k;
+            c.x += c.vx * k;
+            c.y += c.vy * k;
+            c.angle += c.vAngle * k;
             if (c.y > H + 50) {
                 c.alpha = 0;
                 continue;
@@ -463,7 +484,7 @@ export class Renderer {
         if (this._winAnimCards.every(c => c.alpha <= 0)) {
             this._winAnimCards = [];
             if (this._failAnimCards.length === 0)
-                this._animActive = false;
+                this._endAnim();
         }
     }
     // ─── 패배 이펙트 (바람에 흩날리며 불타기) ────────────────────────────────
@@ -471,6 +492,7 @@ export class Renderer {
         this._failAnimCards = [];
         const { cardW, cardH } = this.layout;
         for (let di = DeckIndex.Tab1; di <= DeckIndex.Tab7; di++) {
+            this._animDecks.add(di);
             const deck = game.getDeck(di);
             for (let ci = 0; ci < deck.size(); ci++) {
                 const rect = this.getCardRect(di, ci, game);
@@ -492,25 +514,26 @@ export class Renderer {
         }
         this._animActive = true;
     }
-    _stepFailAnim() {
+    _stepFailAnim(dt) {
         const { ctx } = this;
         const W = this.canvas.clientWidth;
         const H = this.canvas.clientHeight;
+        const k = dt * 60; // 60fps 기준 물리 스텝 스케일
         for (const c of this._failAnimCards) {
-            c.elapsed += 0.016;
+            c.elapsed += dt;
             if (c.elapsed < c.delay)
                 continue;
-            c.vx *= 0.99;
-            c.vy += 0.15;
-            c.x += c.vx;
-            c.y += c.vy;
-            c.angle += c.vAngle;
-            c.firePhase += 0.1;
+            c.vx *= Math.pow(0.99, k);
+            c.vy += 0.15 * k;
+            c.x += c.vx * k;
+            c.y += c.vy * k;
+            c.angle += c.vAngle * k;
+            c.firePhase += 0.1 * k;
             if (c.x > W + 100 || c.x < -100 || c.y > H + 100) {
                 c.alpha = 0;
                 continue;
             }
-            c.alpha = Math.max(0, c.alpha - 0.008);
+            c.alpha = Math.max(0, c.alpha - 0.008 * k);
             ctx.save();
             ctx.globalAlpha = c.alpha;
             ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
@@ -525,13 +548,19 @@ export class Renderer {
         if (this._failAnimCards.every(c => c.alpha <= 0)) {
             this._failAnimCards = [];
             if (this._winAnimCards.length === 0)
-                this._animActive = false;
+                this._endAnim();
             if (this._restartOnComplete) {
                 const cb = this._restartOnComplete;
                 this._restartOnComplete = null;
                 cb();
             }
         }
+    }
+    /** 이펙트 종료: 상태·애니메이션 덱 목록 초기화 */
+    _endAnim() {
+        this._animActive = false;
+        this._animDecks.clear();
+        this._lastFrameTime = 0;
     }
     _drawFire(cx, cy, w, _phase) {
         const { ctx } = this;
@@ -563,6 +592,7 @@ export class Renderer {
             DeckIndex.Tab5, DeckIndex.Tab6, DeckIndex.Tab7,
         ];
         for (const di of deckOrder) {
+            this._animDecks.add(di);
             const deck = game.getDeck(di);
             for (let ci = 0; ci < deck.size(); ci++) {
                 const rect = this.getCardRect(di, ci, game);

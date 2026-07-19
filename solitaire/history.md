@@ -1,5 +1,30 @@
 # 개발 이력
 
+## 2026-07-19 — 코드 리뷰 지적 버그 10건 + 개선 5건 전부 수정
+
+### 버그 수정 (10건)
+1. **다시 하기 동일 배열 재시작** — `SolitaireGame.deal()`에서 초기 배치를 `_initialDeal`로 스냅샷, `restart()` 추가. `main._doRestart` → 이펙트 후 `_restartSameDeal()`로 복원. IndexedDB 스냅샷에도 `initialDeal` 저장(이어하기 후에도 유지).
+2. **Esc로 도움말 닫기** — `InputCallbacks.onEscapeModal` 추가, Esc 시 도움말/확인 팝업을 우선 닫음.
+3. **N 키 시작 무음** — `_newGame()`/`_restartSameDeal()`에서 `sound.init()` 호출.
+4. **한글 IME 단축키** — 키 매핑을 `e.key` → `e.code`(KeyS/KeyZ/Digit1…, Numpad1~7 포함)로 변경.
+5. **키보드 부분 시퀀스 이동** — `_kbMovableCount`가 시퀀스 전체→1장까지 줄여가며 수락 가능한 최대 개수 탐색.
+6. **웨이스트 더블클릭 히트 영역** — `_getDeckAt` 웨이스트 판정 폭을 fan-out 오프셋만큼 확장.
+7. **승리 후 undo 차단** — `_undo()`가 play/pause 상태에서만 동작.
+8. **확인 팝업 위 Esc 상태 꼬임** — #2로 팝업 우선 닫힘 + 확인 팝업 열림 시 `_togglePause` 무시.
+9. **이펙트 중 카드 이중 표시** — `_animDecks`로 애니메이션 중인 덱 추적, `_drawBoard`에서 렌더 생략.
+10. **애니메이션 프레임레이트 종속** — `performance.now()` dt 기반 물리 스텝 스케일(60fps 기준), dt 0.05s 클램프.
+
+### 개선 (5건, 선택)
+- iOS Safari: `sound.init()`/`play()`에서 suspended 시 `ctx.resume()`.
+- `restore()` 무결성 검증(`_validateDecks`, 52장/중복) 후 실패 시 null 반환.
+- 멀티터치: 드래그 시작 터치 `_activeTouchId` 추적, 두 번째 손가락 무시.
+- `MoveCommand.stockCount` 제거(SavedMove 필드는 하위호환 위해 optional 유지).
+- `void cardH`/`void this._rafId` 정리(`_rafId` 필드 제거).
+
+### 검증
+- `tsc --noEmit` 통과(strict/noUnusedLocals), `tsc` 빌드로 `dist/` 재생성.
+- DOM-free 코어 로직 노드 테스트 12건 통과: restart 동일배열, serialize/restore 왕복, initialDeal 유지, 무결성 검증(중복·버전 거부).
+
 ## 2026-07-19 — 전체 코드 리뷰 및 Todo.md 갱신
 
 - src/ 전체 8개 파일(2,738줄) + index.html 코드 리뷰 수행

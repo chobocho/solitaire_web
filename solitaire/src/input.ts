@@ -12,6 +12,8 @@ export interface InputCallbacks {
   onFlipStock():  void;
   onMoveCard(from: DeckIndex, to: DeckIndex, count: number): boolean;
   onAutoMove(from: DeckIndex): void;
+  /** Esc 처리 우선순위: 도움말/확인 팝업이 열려 있으면 닫고 true 반환 */
+  onEscapeModal(): boolean;
 }
 
 export type { KeyboardSelectState } from './renderer.js';
@@ -23,20 +25,28 @@ export type { KeyboardSelectState } from './renderer.js';
 //   Foundation(우):  Q W E R
 //   Tableau(하단):   1 2 3 4 5 6 7
 
-const DECK_KEY_MAP: Record<string, DeckIndex> = {
-  's': DeckIndex.Stock,
-  'd': DeckIndex.Waste,
-  'q': DeckIndex.Found1,
-  'w': DeckIndex.Found2,
-  'e': DeckIndex.Found3,
-  'r': DeckIndex.Found4,
-  '1': DeckIndex.Tab1,
-  '2': DeckIndex.Tab2,
-  '3': DeckIndex.Tab3,
-  '4': DeckIndex.Tab4,
-  '5': DeckIndex.Tab5,
-  '6': DeckIndex.Tab6,
-  '7': DeckIndex.Tab7,
+// e.code 기반 매핑 — 한/영 IME 상태와 무관하게 물리 키 위치로 인식
+const DECK_CODE_MAP: Record<string, DeckIndex> = {
+  'KeyS':   DeckIndex.Stock,
+  'KeyD':   DeckIndex.Waste,
+  'KeyQ':   DeckIndex.Found1,
+  'KeyW':   DeckIndex.Found2,
+  'KeyE':   DeckIndex.Found3,
+  'KeyR':   DeckIndex.Found4,
+  'Digit1': DeckIndex.Tab1,
+  'Digit2': DeckIndex.Tab2,
+  'Digit3': DeckIndex.Tab3,
+  'Digit4': DeckIndex.Tab4,
+  'Digit5': DeckIndex.Tab5,
+  'Digit6': DeckIndex.Tab6,
+  'Digit7': DeckIndex.Tab7,
+  'Numpad1': DeckIndex.Tab1,
+  'Numpad2': DeckIndex.Tab2,
+  'Numpad3': DeckIndex.Tab3,
+  'Numpad4': DeckIndex.Tab4,
+  'Numpad5': DeckIndex.Tab5,
+  'Numpad6': DeckIndex.Tab6,
+  'Numpad7': DeckIndex.Tab7,
 };
 
 export const DECK_KEY_LABELS: Record<number, string> = {
@@ -68,6 +78,8 @@ export class InputHandler {
 
   private lastTapTime: number = 0;
   private lastTapDeck: DeckIndex | null = null;
+  /** 드래그를 시작한 터치 식별자 (멀티터치 시 다른 손가락 무시용) */
+  private _activeTouchId: number | null = null;
 
   private _kbState: KeyboardSelectState = { selectedDeck: null, ctrlHeld: false };
 
@@ -118,6 +130,9 @@ export class InputHandler {
   private _bindTouch(): void {
     this.canvas.addEventListener('touchstart', e => {
       e.preventDefault();
+      // 이미 한 손가락으로 드래그 중이면 두 번째 손가락은 무시 (드래그 가로채기 방지)
+      if (this.drag.isDragging && this._activeTouchId !== null) return;
+
       const t   = e.changedTouches[0];
       const pos = this._touchPos(t);
       const now = Date.now();
@@ -130,24 +145,38 @@ export class InputHandler {
       }
       this.lastTapTime = now;
       this.lastTapDeck = deckIdx;
+      this._activeTouchId = t.identifier;
       this._onPress(t.clientX, t.clientY);
     }, { passive: false });
 
     this.canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      const t = e.changedTouches[0];
+      const t = this._findActiveTouch(e.changedTouches);
+      if (!t) return;
       this._onMove(t.clientX, t.clientY);
     }, { passive: false });
 
     this.canvas.addEventListener('touchend', e => {
       e.preventDefault();
-      const t = e.changedTouches[0];
+      const t = this._findActiveTouch(e.changedTouches);
+      if (!t) return;
       this._onRelease(t.clientX, t.clientY);
+      this._activeTouchId = null;
     }, { passive: false });
 
     this.canvas.addEventListener('touchcancel', () => {
       if (this.drag.isDragging) this._cancelDrag();
+      this._activeTouchId = null;
     });
+  }
+
+  /** 드래그를 시작한 손가락(identifier)에 해당하는 Touch 를 찾는다 */
+  private _findActiveTouch(list: TouchList): Touch | null {
+    if (this._activeTouchId === null) return list[0] ?? null;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].identifier === this._activeTouchId) return list[i];
+    }
+    return null;
   }
 
   // ── 키보드 ──────────────────────────────────────────────────────────────
@@ -159,36 +188,38 @@ export class InputHandler {
         return;
       }
 
-      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const key = e.key.toLowerCase();
-        if (key in DECK_KEY_MAP) {
-          e.preventDefault();
-          this._handleDeckKey(DECK_KEY_MAP[key]);
-          return;
-        }
+      const code = e.code;
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && code in DECK_CODE_MAP) {
+        e.preventDefault();
+        this._handleDeckKey(DECK_CODE_MAP[code]);
+        return;
       }
 
-      switch (e.key) {
-        case 'z': case 'Z':
+      switch (code) {
+        case 'KeyZ':
           e.preventDefault();
           this.cb.onUndo();
           break;
-        case 'n': case 'N':
+        case 'KeyN':
           if (!e.ctrlKey) { e.preventDefault(); this.cb.onNewGame(); }
           break;
         case 'Enter':
+        case 'NumpadEnter':
           if (this.game.state === 'play' && this._kbState.selectedDeck !== null) {
             e.preventDefault();
             this.cb.onAutoMove(this._kbState.selectedDeck);
             this._kbState.selectedDeck = null;
           }
           break;
-        case ' ':
+        case 'Space':
           e.preventDefault();
           this.cb.onPause();
           break;
         case 'Escape':
           e.preventDefault();
+          // 도움말/확인 팝업이 열려 있으면 먼저 닫는다
+          if (this.cb.onEscapeModal()) break;
           if (this._kbState.selectedDeck !== null) {
             this._kbState.selectedDeck = null;
           } else if (this.drag.isDragging) {
@@ -231,7 +262,7 @@ export class InputHandler {
     } else if (selectedDeck === deckIdx) {
       this._kbState.selectedDeck = null;
     } else {
-      // 이동 시도
+      // 이동 시도: 목적지가 수락 가능한 최대 카드 수를 찾는다
       const count = this._kbMovableCount(selectedDeck, deckIdx);
       if (count > 0) {
         this.cb.onMoveCard(selectedDeck, deckIdx, count);
@@ -240,17 +271,35 @@ export class InputHandler {
     }
   }
 
-  private _kbMovableCount(from: DeckIndex, _to: DeckIndex): number {
-    if (from === DeckIndex.Waste) return 1;
-    if (from >= DeckIndex.Found1 && from <= DeckIndex.Found4) return 1;
-    const deck = this.game.getDeck(from);
-    if (deck.isEmpty()) return 0;
-    // 태블로: 이동 가능한 시퀀스 길이
-    if (from >= DeckIndex.Tab1 && from <= DeckIndex.Tab7) {
-      const tabDeck = deck as import('./deck.js').TableauDeck;
-      return tabDeck.sequenceLength();
+  /**
+   * from 덱에서 to 덱으로 옮길 수 있는 카드 수를 반환 (0 = 이동 불가).
+   * 태블로→태블로는 전체 시퀀스부터 1장까지 줄여가며, 목적지가 수락하는
+   * 가장 큰 개수를 찾는다. (예: 9-8-7 시퀀스에서 8 위로 7만 이동 가능)
+   */
+  private _kbMovableCount(from: DeckIndex, to: DeckIndex): number {
+    const toDeck = this.game.getDeck(to);
+
+    if (from === DeckIndex.Waste) {
+      const c = this.game.getDeck(DeckIndex.Waste).top();
+      return c && c.isOpen && toDeck.canAccept(c) ? 1 : 0;
     }
-    return 1;
+    if (from >= DeckIndex.Found1 && from <= DeckIndex.Found4) {
+      const c = this.game.getDeck(from).top();
+      return c && c.isOpen && toDeck.canAccept(c) ? 1 : 0;
+    }
+    if (from >= DeckIndex.Tab1 && from <= DeckIndex.Tab7) {
+      const deck = this.game.getDeck(from) as import('./deck.js').TableauDeck;
+      if (deck.isEmpty()) return 0;
+      const seq = deck.sequenceLength();
+      // 큰 개수부터 시도: 이동하는 묶음의 맨 아래 카드를 목적지가 수락해야 함
+      for (let count = seq; count >= 1; count--) {
+        const bottom = deck.get(deck.size() - count);
+        if (!bottom.isOpen) continue;
+        if (toDeck.canAccept(bottom)) return count;
+      }
+      return 0;
+    }
+    return 0;
   }
 
   // ── 공통 처리 ────────────────────────────────────────────────────────────
@@ -422,8 +471,14 @@ export class InputHandler {
 
     // 스톡
     if (this._inRect(x, y, L.stockX, L.topRowY, cardW, cardH)) return DeckIndex.Stock;
-    // 웨이스트
-    if (this._inRect(x, y, L.wasteX, L.topRowY, cardW, cardH)) return DeckIndex.Waste;
+    // 웨이스트 — 맨 위 카드는 최대 (showCount-1)*offset 만큼 우측으로 그려지므로
+    // 히트 영역을 그 오프셋만큼 넓힌다 (버그 6)
+    {
+      const waste = this.game.getDeck(DeckIndex.Waste);
+      const showCount = Math.min(3, waste.size());
+      const off = Math.max(0, showCount - 1) * Math.min(18, Math.floor(cardW * 0.2));
+      if (this._inRect(x, y, L.wasteX, L.topRowY, cardW + off, cardH)) return DeckIndex.Waste;
+    }
     // 파운데이션
     for (let i = 0; i < 4; i++) {
       if (this._inRect(x, y, L.foundX[i], L.topRowY, cardW, cardH))

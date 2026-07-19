@@ -15,7 +15,6 @@ class GameController {
   private storage:  GameStorage;
 
   private canvas!:       HTMLCanvasElement;
-  private _rafId = 0;
   private startTime:     number = 0;
   private elapsed:       number = 0;
   private timerInterval: number = 0;
@@ -58,6 +57,7 @@ class GameController {
       onFlipStock: () => this._flipStock(),
       onMoveCard:  (from, to, count) => this._handleMove(from, to, count),
       onAutoMove:  (from) => this._handleAutoMove(from),
+      onEscapeModal: () => this._handleEscapeModal(),
     });
   }
 
@@ -260,16 +260,29 @@ class GameController {
     this.confirmRestartOverlay.classList.remove('hidden');
   }
 
-  /** 다시 하기 실행: 전체 카드 불타는 이펙트 후 새 게임 시작 */
+  /** 다시 하기 실행: 전체 카드 불타는 이펙트 후 같은 배열로 재시작 */
   private _doRestart(): void {
     this._stopTimer();
     this.storage.clear();
     this.sound.play('lose');
 
-    // 이펙트 재생 — 완료 콜백에서 새 게임 시작
+    // 이펙트 재생 — 완료 콜백에서 동일 배열로 재시작
     this.renderer.startRestartEffect(this.game, () => {
-      this._newGame();
+      this._restartSameDeal();
     });
+  }
+
+  /** deal() 시 저장한 초기 배치로 되돌려 재시작 (새 셔플 없음) */
+  private _restartSameDeal(): void {
+    this._stopTimer();
+    const ok = this.game.restart();
+    if (!ok) { this._newGame(); return; }
+    void this.sound.init();
+    this.elapsed = 0;
+    this._startTimer();
+    this._hideAllOverlays();
+    this._updateUI();
+    this._scheduleSave();
   }
 
   /** 새 게임 요청: 게임 진행 중이면 확인 팝업, 아니면 즉시 시작 */
@@ -310,6 +323,8 @@ class GameController {
   }
 
   private _newGame(): void {
+    // 키보드(N)로 시작하는 경우에도 소리가 나도록 사운드 초기화 (사용자 제스처 내)
+    void this.sound.init();
     this._stopTimer();
     this.storage.clear();
     this.game.deal();
@@ -321,6 +336,8 @@ class GameController {
   }
 
   private _undo(): void {
+    // 승리/미시작 상태에서는 undo 차단 (승리 처리 후 상태 불일치 방지)
+    if (this.game.state !== 'play' && this.game.state !== 'pause') return;
     if (!this.game.canUndo) return;
     this.game.undo();
     this.sound.play('card_flip');
@@ -338,8 +355,35 @@ class GameController {
     }
   }
 
+  /**
+   * Esc 우선 처리: 도움말/확인 팝업이 열려 있으면 닫고 true 반환.
+   * 열린 모달이 없으면 false (호출측이 선택취소/일시정지로 처리).
+   */
+  private _handleEscapeModal(): boolean {
+    if (!this.helpOverlay.classList.contains('hidden')) {
+      this._toggleHelp();
+      return true;
+    }
+    for (const ov of [this.confirmNewOverlay, this.confirmGiveupOverlay, this.confirmRestartOverlay]) {
+      if (!ov.classList.contains('hidden')) {
+        this._dismissConfirm(ov);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** 확인 팝업이 하나라도 열려 있는지 */
+  private _anyConfirmOpen(): boolean {
+    return !this.confirmNewOverlay.classList.contains('hidden')
+        || !this.confirmGiveupOverlay.classList.contains('hidden')
+        || !this.confirmRestartOverlay.classList.contains('hidden');
+  }
+
   private _togglePause(): void {
     if (this.game.state === 'idle' || this.game.state === 'win') return;
+    // 확인 팝업이 떠 있는 동안에는 일시정지 토글 금지 (팝업 뒤 상태 꼬임 방지)
+    if (this._anyConfirmOpen()) return;
 
     if (this.game.state === 'play') {
       this.game.pause();
@@ -497,10 +541,9 @@ class GameController {
           this.input.getKeyboardState(),
         );
       }
-      this._rafId = requestAnimationFrame(step);
-      void this._rafId;
+      requestAnimationFrame(step);
     };
-    this._rafId = requestAnimationFrame(step);
+    requestAnimationFrame(step);
   }
 
 }

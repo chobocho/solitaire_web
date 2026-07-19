@@ -11,6 +11,8 @@ export class SolitaireGame {
         this._history = [];
         this._state = 'idle';
         this._moveCount = 0;
+        /** deal() 직후 초기 배치 스냅샷 ("다시 하기"로 같은 배열 재시작용) */
+        this._initialDeal = null;
         this._buildDecks();
     }
     // ── Getter ──────────────────────────────────────────────────────────────
@@ -60,7 +62,45 @@ export class SolitaireGame {
             this._decks[DeckIndex.Stock].push(card);
             card = init.pop();
         }
+        this._initialDeal = this._snapshotDecks();
         this._state = 'play';
+    }
+    /**
+     * "다시 하기": deal() 로 저장해 둔 초기 배치로 되돌린다.
+     * 새로 셔플하지 않고 동일한 카드 배열로 재시작.
+     * @returns 초기 스냅샷이 없으면 false
+     */
+    restart() {
+        if (!this._initialDeal)
+            return false;
+        this._buildDecks();
+        for (let i = 0; i < TOTAL_DECKS; i++) {
+            const deckSnap = this._initialDeal[i];
+            if (!deckSnap)
+                continue;
+            for (const cs of deckSnap.cards) {
+                const card = new Card(cs.figure, cs.number);
+                if (cs.isOpen)
+                    card.open();
+                else
+                    card.close();
+                this._decks[i].push(card);
+            }
+        }
+        this._history = [];
+        this._moveCount = 0;
+        this._state = 'play';
+        return true;
+    }
+    /** 현재 덱 상태를 SavedDeck[] 형태로 스냅샷 */
+    _snapshotDecks() {
+        return this._decks.map(deck => ({
+            cards: deck.toArray().map(c => ({
+                figure: c.figure,
+                number: c.number,
+                isOpen: c.isOpen,
+            })),
+        }));
     }
     // ── 스톡 뒤집기 ─────────────────────────────────────────────────────────
     /**
@@ -79,7 +119,7 @@ export class SolitaireGame {
             const wasteSnapshot = waste.toArray().map(c => ({ figure: c.figure, number: c.number }));
             // 재충전
             stock.refillFrom(waste);
-            this._history.push({ type: 'refill', stockCount: stock.size(), wasteSnapshot });
+            this._history.push({ type: 'refill', wasteSnapshot });
             this._moveCount++;
             return true;
         }
@@ -279,20 +319,13 @@ export class SolitaireGame {
     }
     // ── 직렬화 / 복원 ────────────────────────────────────────────────────────
     serialize(elapsed) {
-        const decks = this._decks.map(deck => ({
-            cards: deck.toArray().map(c => ({
-                figure: c.figure,
-                number: c.number,
-                isOpen: c.isOpen,
-            })),
-        }));
+        const decks = this._snapshotDecks();
         const history = this._history.map(cmd => ({
             type: cmd.type,
             from: cmd.from ?? -1,
             to: cmd.to ?? -1,
             count: cmd.count ?? 0,
             didOpenCard: cmd.didOpenCard ?? false,
-            stockCount: cmd.stockCount ?? 0,
             wasteSnapshot: cmd.wasteSnapshot ?? [],
         }));
         return {
@@ -303,6 +336,7 @@ export class SolitaireGame {
             elapsed,
             decks,
             history,
+            initialDeal: this._initialDeal ?? undefined,
         };
     }
     restore(snap) {
@@ -323,22 +357,38 @@ export class SolitaireGame {
                     this._decks[i].push(card);
                 }
             }
+            // 무결성 검증: 카드 52장 + 중복 없음
+            if (!this._validateDecks())
+                return null;
             this._history = snap.history.map(h => ({
                 type: h.type,
                 from: h.from >= 0 ? h.from : undefined,
                 to: h.to >= 0 ? h.to : undefined,
                 count: h.count,
                 didOpenCard: h.didOpenCard,
-                stockCount: h.stockCount,
                 wasteSnapshot: h.wasteSnapshot,
             }));
             this._moveCount = snap.moveCount;
             this._state = snap.gameState;
+            this._initialDeal = snap.initialDeal ?? null;
             return snap.elapsed;
         }
         catch {
             return null;
         }
+    }
+    /** 전체 덱에 52장의 카드가 중복 없이 존재하는지 검증 */
+    _validateDecks() {
+        const seen = new Set();
+        for (const deck of this._decks) {
+            for (const c of deck.toArray()) {
+                const key = c.figure * 100 + c.number;
+                if (seen.has(key))
+                    return false;
+                seen.add(key);
+            }
+        }
+        return seen.size === 52;
     }
     // ── 내부 헬퍼 ────────────────────────────────────────────────────────────
     _isFoundation(idx) {

@@ -24,6 +24,8 @@ export interface GameSnapshot {
   elapsed:   number;
   decks:     SavedDeck[];
   history:   SavedMove[];
+  /** deal() 직후 초기 배치 ("다시 하기"로 같은 배열 재시작용) */
+  initialDeal?: SavedDeck[];
 }
 
 export interface SavedMove {
@@ -32,7 +34,6 @@ export interface SavedMove {
   to:            number;
   count:         number;
   didOpenCard:   boolean;
-  stockCount:    number;
   wasteSnapshot: Array<{ figure: number; number: number }>;
 }
 
