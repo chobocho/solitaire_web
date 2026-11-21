@@ -4,16 +4,17 @@ import { InputHandler } from './input.js';
 import { SoundManager } from './sound.js';
 import { GameStorage, formatSavedAt } from './storage.js';
 import { DeckIndex } from './deck.js';
-import { DIFFICULTIES, pickSeed } from './difficulty.js';
+import { randomLfsrState } from './lfsr.js';
+import { DIFFICULTIES, DIFFICULTY_LABEL, pickSeedByLfsr, difficultyOfSeed, } from './difficulty.js';
 const DIFFICULTY_KEY = 'solitaire.difficulty';
-const RECENT_SEEDS_KEY = 'solitaire.recentSeeds';
-const RECENT_SEEDS_MAX = 30;
 // ─── GameController ────────────────────────────────────────────────────────
 class GameController {
     constructor() {
         this.startTime = 0;
         this.elapsed = 0;
         this.timerInterval = 0;
+        /** 난이도별 LFSR 상태 (IndexedDB에서 로드) */
+        this.lfsrState = {};
         this._saveTimer = 0;
         this._toastTimer = 0;
         this.game = new SolitaireGame();
@@ -36,6 +37,11 @@ class GameController {
     async start() {
         await this.renderer.init();
         await this.storage.init();
+        for (const d of DIFFICULTIES) {
+            const v = await this.storage.loadLevelState(d);
+            if (v !== null)
+                this.lfsrState[d] = v;
+        }
         this._bindButtons();
         this._bindResize();
         this._bindPageHide();
@@ -51,6 +57,7 @@ class GameController {
         };
         this.canvas = req('game-canvas');
         this.elMoves = req('moves-value');
+        this.elGameInfo = req('game-info');
         this.elTimer = req('timer-value');
         this.elUndoBtn = req('btn-undo');
         this.elPauseBtn = req('btn-pause');
@@ -285,26 +292,27 @@ class GameController {
     }
     /**
      * 선택된 난이도에 맞는 시드를 고른다. 랜덤이면 undefined(완전 무작위 셔플).
-     * 최근에 한 시드는 피하고, 고른 시드는 최근 목록에 기록한다.
+     * 난이도별 LFSR 상태를 한 칸 전진시켜 고르므로, 한 바퀴(목록 길이) 동안 같은 판이 나오지 않는다.
+     * 상태는 메모리에 두고 IndexedDB에 비동기로 저장한다. 저장값이 없으면 랜덤 위치에서 시작.
      */
     _chooseSeed() {
         const sel = document.getElementById('difficulty-select');
         const value = sel?.value ?? 'random';
         if (!DIFFICULTIES.includes(value))
             return undefined;
-        let recent = [];
-        try {
-            recent = JSON.parse(localStorage.getItem(RECENT_SEEDS_KEY) ?? '[]');
-        }
-        catch {
-            recent = [];
-        }
-        const seed = pickSeed(value, Math.random, new Set(recent));
-        try {
-            localStorage.setItem(RECENT_SEEDS_KEY, JSON.stringify([...recent, seed].slice(-RECENT_SEEDS_MAX)));
-        }
-        catch { /* 저장 실패는 무시 */ }
-        return seed;
+        const level = value;
+        const r = pickSeedByLfsr(level, this.lfsrState[level] ?? randomLfsrState());
+        this.lfsrState[level] = r.state;
+        void this.storage.saveLevelState(level, r.state);
+        return r.seed;
+    }
+    /** 헤더 표시: "#시드 난이도" (시드 정보가 없는 옛 저장본은 "-") */
+    _gameInfoText() {
+        const seed = this.game.seed;
+        if (!seed)
+            return '-';
+        const d = difficultyOfSeed(seed);
+        return `#${seed} ${d ? DIFFICULTY_LABEL[d] : '랜덤'}`;
     }
     /** 난이도 선택 복원/저장 */
     _bindDifficulty() {
@@ -469,6 +477,7 @@ class GameController {
     // ── UI 업데이트 ─────────────────────────────────────────────────────────
     _updateUI() {
         this.elMoves.textContent = String(this.game.moveCount);
+        this.elGameInfo.textContent = this._gameInfoText();
         this.elUndoBtn.disabled = !this.game.canUndo;
         // 스톡 남은 카드 수 표시
         const stockSize = this.game.getDeck(DeckIndex.Stock).size();

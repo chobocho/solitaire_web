@@ -26,6 +26,8 @@ export interface GameSnapshot {
   history:   SavedMove[];
   /** deal() 직후 초기 배치 ("다시 하기"로 같은 배열 재시작용) */
   initialDeal?: SavedDeck[];
+  /** 이 판의 셔플 시드 (옛 저장본에는 없음) */
+  seed?: number;
 }
 
 export interface SavedMove {
@@ -43,6 +45,7 @@ const DB_NAME    = 'solitaire-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'saves';
 const SAVE_KEY   = 'autosave';
+const LFSR_KEY_PREFIX = 'lfsr:';
 const SCHEMA_VER = 2;
 
 // ─── GameStorage ───────────────────────────────────────────────────────────
@@ -111,6 +114,30 @@ export class GameStorage {
       const req = st.delete(SAVE_KEY);
       req.onsuccess = () => resolve();
       req.onerror   = () => resolve();
+    });
+  }
+
+  /** 난이도별 LFSR 상태 저장 (같은 저장소, 키만 다름 → DB 버전/마이그레이션 불필요) */
+  async saveLevelState(level: string, state: number): Promise<void> {
+    if (!this.db) return;
+    return new Promise((resolve) => {
+      const tx  = this.db!.transaction(STORE_NAME, 'readwrite');
+      const req = tx.objectStore(STORE_NAME).put(state, LFSR_KEY_PREFIX + level);
+      req.onsuccess = () => resolve();
+      req.onerror   = () => resolve();
+    });
+  }
+
+  async loadLevelState(level: string): Promise<number | null> {
+    if (!this.db) return null;
+    return new Promise((resolve) => {
+      const tx  = this.db!.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(LFSR_KEY_PREFIX + level);
+      req.onsuccess = () => {
+        const v = req.result as unknown;
+        resolve(typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 2047 ? v : null);
+      };
+      req.onerror = () => resolve(null);
     });
   }
 
