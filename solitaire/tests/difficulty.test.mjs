@@ -50,3 +50,29 @@ test('pickSeed: exclude 시드는 피하고, 전부 제외되면 무시', () => 
   const all = new Set(SEEDS.easy);
   assert.ok(SEEDS.easy.includes(pickSeed('easy', () => 0, all)));
 });
+
+import { difficultyOfSeed } from '../dist/difficulty.js';
+import { SolitaireGame } from '../dist/solitaire.js';
+
+test('difficultyOfSeed: 목록의 시드는 해당 난이도, 목록 밖은 null', () => {
+  for (const d of DIFFICULTIES) {
+    assert.equal(difficultyOfSeed(SEEDS[d][0]), d);
+    assert.equal(difficultyOfSeed(SEEDS[d].at(-1)), d);
+  }
+  assert.equal(difficultyOfSeed(4294967295), null);
+  assert.equal(difficultyOfSeed(0), null);
+});
+
+test('저장/복원: 시드가 스냅샷에 보존되고, 시드 없는 옛 스냅샷은 0', () => {
+  const g = new SolitaireGame();
+  g.deal(SEEDS.hard[0]);
+  const snap = g.serialize(5);
+  assert.equal(snap.seed, SEEDS.hard[0]);
+  const g2 = new SolitaireGame();
+  assert.equal(g2.restore(snap), 5);
+  assert.equal(g2.seed, SEEDS.hard[0]);
+  const old = { ...snap }; delete old.seed;
+  const g3 = new SolitaireGame();
+  assert.equal(g3.restore(old), 5);
+  assert.equal(g3.seed, 0);
+});

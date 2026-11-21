@@ -379,6 +379,7 @@ export class SolitaireGame {
       decks,
       history,
       initialDeal: this._initialDeal ?? undefined,
+      seed: this._seed,
     };
   }
 
@@ -408,6 +409,7 @@ export class SolitaireGame {
       this._moveCount   = snap.moveCount;
       this._state       = snap.gameState as GameState;
       this._initialDeal = snap.initialDeal ?? null;
+      this._seed        = snap.seed ?? 0;
       return snap.elapsed;
     } catch {
       return null;

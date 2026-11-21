@@ -3,6 +3,7 @@
 // (많이 헤맬수록 사람에게도 어려운 판이라고 본다.)
 
 import { SEEDS } from './seeds.js';
+import { nextLfsrIndex } from './lfsr.js';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -37,4 +38,26 @@ export function pickSeed(
     if (rest.length > 0) list = rest;
   }
   return list[Math.floor(rand() * list.length)];
+}
+
+let _seedLevel: Map<number, Difficulty> | null = null;
+
+/** 시드가 속한 난이도. 목록에 없는 시드(랜덤 게임)는 null */
+export function difficultyOfSeed(seed: number): Difficulty | null {
+  if (_seedLevel === null) {
+    _seedLevel = new Map();
+    for (const d of DIFFICULTIES) for (const s of SEEDS[d]) _seedLevel.set(s, d);
+  }
+  return _seedLevel.get(seed) ?? null;
+}
+
+/**
+ * LFSR 순서로 다음 시드를 고른다. 한 바퀴(목록 길이만큼) 동안 같은 시드가 나오지 않는다.
+ * @param state 현재 LFSR 상태 (저장된 값)
+ * @returns 고른 시드와 새 LFSR 상태 (새 상태를 저장해야 한다)
+ */
+export function pickSeedByLfsr(d: Difficulty, state: number): { seed: number; state: number } {
+  const list = SEEDS[d];
+  const r = nextLfsrIndex(state, list.length);
+  return { seed: list[r.index], state: r.state };
 }
