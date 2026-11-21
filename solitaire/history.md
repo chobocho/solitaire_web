@@ -113,3 +113,8 @@ Android Solitaire 게임을 HTML5 Canvas + TypeScript 기반 웹 버전으로 �
 - UI: 툴바에 난이도 선택(하/중/상/랜덤) 추가, localStorage 저장. 최근 30판 시드는 제외하여 중복 방지. 랜덤은 기존처럼 완전 무작위
 - `tests/difficulty.test.mjs` 신규, 전체 23개 통과. release 단일 파일 빌드 확인(약 934KB)
 - 미확인: 실제 브라우저 화면 동작. 미구현: 시드 IndexedDB 저장, 게임 번호 표시
+
+## 2026-11-22 — 난이도별 시드 2000판씩으로 확대
+- `node scripts/gen-seeds.mjs 1 40000 10000 2000` 으로 재생성(약 21분): 하/중/상 각 2000판, 총 6000판 (시드 약 1~13000 탐색)
+- 기존 300판씩 목록은 `docs/seeds_300.md`에 기록으로 보존
+- 전체 테스트 23개 통과, tsc/release 단일 파일 빌드 확인

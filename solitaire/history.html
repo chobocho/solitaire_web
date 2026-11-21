@@ -1,5 +1,11 @@
 <!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>history</title></head><body>
 <h1>작업 이력</h1>
+<h2>2026-11-22 — 난이도별 시드 2000판씩으로 확대</h2>
+<ul>
+<li>scripts/gen-seeds.mjs 1 40000 10000 2000 으로 재생성(약 21분): 하/중/상 각 2000판, 총 6000판 (시드 약 1~13000 탐색)</li>
+<li>기존 300판씩 목록은 docs/seeds_300.md에 기록으로 보존</li>
+<li>전체 테스트 23개 통과, tsc/release 단일 파일 빌드 확인</li>
+</ul>
 <h2>2026-11-22 — 난이도 선택 3단계: 난이도별 시드 목록 + UI</h2>
 <ul>
 <li>src/difficulty.ts 신규: 솔버 탐색 노드 수로 분류(하 ≤45, 중 ≤200, 상 &gt;200), pickSeed(난이도, rand, 제외시드)</li>
