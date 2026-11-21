@@ -91,3 +91,18 @@ Android Solitaire 게임을 HTML5 Canvas + TypeScript 기반 웹 버전으로 �
 ## 2026-11-21 — 릴리즈 빌드 단일 파일화 보완
 - `build.sh`/`build.bat` 실행 시 `release/` 폴더를 먼저 삭제 후 재생성하도록 수정
 - 이전 빌드의 잔여 파일(css, dist, img)이 사라지고 `release/index.html` 하나만 생성됨 (약 904KB, 외부 참조 없음)
+
+## 2026-11-22 — 난이도 선택 1단계: 시드 기반 셔플 도입
+- `src/rng.ts` 신규: mulberry32 시드 PRNG, `randomSeed()`
+- `InitDeck(seed?)`, `SolitaireGame.deal(seed?)` 추가 및 `seed` getter 제공. 시드 생략 시 기존처럼 랜덤(시드는 기록됨)
+- `tests/seed.test.mjs` 신규 (9개 통과). 실행: `tsc && node --test "tests/*.test.mjs"`
+- 미반영: 시드의 IndexedDB 저장, UI 표시(게임 번호)
+- 다음: 2단계 솔버 구현 → 3단계 난이도별 시드 목록 생성
+
+## 2026-11-22 — 난이도 선택 2단계: 솔버 구현
+- `src/solver.ts` 신규: 클론다이크 솔버(스톡 1장 뽑기, 재순환 무제한). 최선 우선 탐색 + 방문 상태 메모 + 안전한 파운데이션 자동 이동
+- `solve(layout, {maxNodes})` → solved / unsolvable / unknown, 탐색 노드 수, 풀이 수순 반환. `layoutFromSeed(seed)` 제공
+- solved는 실제 `SolitaireGame`에 재생해 승리까지 검증 (`tests/solver.test.mjs`, 전체 17개 통과)
+- 한계: 파운데이션→태블로 이동은 탐색하지 않음. 시드 60개 중 약 절반만 풀이 확인(노드 한도 5천~3만), 나머지는 unknown
+- 방침: 풀이가 확인된(solved) 시드만 모아 시드 목록으로 관리하므로 모든 판을 풀 필요는 없음. unknown은 제외
+- 다음: 3단계 난이도 기준(풀이 수순 길이, 탐색 노드 수 등)으로 시드 목록 생성 스크립트 + UI 상/중/하 선택
