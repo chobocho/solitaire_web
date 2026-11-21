@@ -411,3 +411,10 @@ kbd {
   .stat-item:last-child { display: none; }
   .btn-mute { display: none; }
 }
+
+.btn-difficulty {
+  background: #37474f;
+  color: #fff;
+  appearance: auto;
+}
+.btn-difficulty:hover { background: #455a64; }

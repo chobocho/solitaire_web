@@ -106,3 +106,10 @@ Android Solitaire 게임을 HTML5 Canvas + TypeScript 기반 웹 버전으로 �
 - 한계: 파운데이션→태블로 이동은 탐색하지 않음. 시드 60개 중 약 절반만 풀이 확인(노드 한도 5천~3만), 나머지는 unknown
 - 방침: 풀이가 확인된(solved) 시드만 모아 시드 목록으로 관리하므로 모든 판을 풀 필요는 없음. unknown은 제외
 - 다음: 3단계 난이도 기준(풀이 수순 길이, 탐색 노드 수 등)으로 시드 목록 생성 스크립트 + UI 상/중/하 선택
+
+## 2026-11-22 — 난이도 선택 3단계: 난이도별 시드 목록 + UI
+- `src/difficulty.ts` 신규: 솔버 탐색 노드 수로 분류(하 ≤45, 중 ≤200, 상 >200), `pickSeed(난이도, rand, 제외시드)`
+- `scripts/gen-seeds.mjs` 신규: 시드 1~3000을 풀어 풀이 확인된 시드만 `src/seeds.ts` 생성(하/중/상 각 300개, 약 3.5분). 재생성: `tsc && node scripts/gen-seeds.mjs`
+- UI: 툴바에 난이도 선택(하/중/상/랜덤) 추가, localStorage 저장. 최근 30판 시드는 제외하여 중복 방지. 랜덤은 기존처럼 완전 무작위
+- `tests/difficulty.test.mjs` 신규, 전체 23개 통과. release 단일 파일 빌드 확인(약 934KB)
+- 미확인: 실제 브라우저 화면 동작. 미구현: 시드 IndexedDB 저장, 게임 번호 표시
