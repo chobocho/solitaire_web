@@ -32,7 +32,9 @@ echo        OK
 
 :: Step 3: Inline images / css / js into a single index.html
 echo [3/4] Inlining assets...
-if not exist "%RELEASE_DIR%" mkdir "%RELEASE_DIR%"
+:: remove stale files so only index.html remains
+if exist "%RELEASE_DIR%" rmdir /s /q "%RELEASE_DIR%"
+mkdir "%RELEASE_DIR%"
 call node build-inline.cjs "%TMP_BUNDLE%" "index.html" "css\style.css" "img" "%RELEASE_DIR%\%OUT_FILE%"
 if errorlevel 1 (
     echo        inlining failed; aborting.

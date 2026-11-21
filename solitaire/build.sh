@@ -35,6 +35,7 @@ echo "       OK"
 
 # ── Step 3: Inline images / css / js into a single index.html ────────────
 echo "[3/4] Inlining assets..."
+rm -rf "$OUT_DIR"   # remove stale files so only index.html remains
 mkdir -p "$OUT_DIR"
 node build-inline.cjs "$TMP/bundle.js" "index.html" "css/style.css" "img" "$OUT_DIR/$OUT_FILE"
 echo "       OK"

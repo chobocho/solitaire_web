@@ -87,3 +87,7 @@ Android Solitaire 게임을 HTML5 Canvas + TypeScript 기반 웹 버전으로 �
 ### 참조
 - Android 원본: `C:\github2\solitaire2\src\solitaire\app\src\`
 - 참고 소스: `C:\github2\freecell\src\webgame\` (sound.ts, storage.ts 구조 재사용)
+
+## 2026-11-21 — 릴리즈 빌드 단일 파일화 보완
+- `build.sh`/`build.bat` 실행 시 `release/` 폴더를 먼저 삭제 후 재생성하도록 수정
+- 이전 빌드의 잔여 파일(css, dist, img)이 사라지고 `release/index.html` 하나만 생성됨 (약 904KB, 외부 참조 없음)
