@@ -4,6 +4,11 @@ import { InputHandler } from './input.js';
 import { SoundManager } from './sound.js';
 import { GameStorage, formatSavedAt } from './storage.js';
 import { DeckIndex } from './deck.js';
+import { DIFFICULTIES, pickSeed, type Difficulty } from './difficulty.js';
+
+const DIFFICULTY_KEY = 'solitaire.difficulty';
+const RECENT_SEEDS_KEY = 'solitaire.recentSeeds';
+const RECENT_SEEDS_MAX = 30;
 
 // ─── GameController ────────────────────────────────────────────────────────
 
@@ -102,6 +107,7 @@ class GameController {
   }
 
   private _bindButtons(): void {
+    this._bindDifficulty();
     document.getElementById('btn-new')!.addEventListener('click', () => this._requestNewGame());
     this.elUndoBtn.addEventListener('click', () => this._undo());
     this.elPauseBtn.addEventListener('click', () => this._togglePause());
@@ -322,12 +328,45 @@ class GameController {
     }
   }
 
+  /**
+   * 선택된 난이도에 맞는 시드를 고른다. 랜덤이면 undefined(완전 무작위 셔플).
+   * 최근에 한 시드는 피하고, 고른 시드는 최근 목록에 기록한다.
+   */
+  private _chooseSeed(): number | undefined {
+    const sel = document.getElementById('difficulty-select') as HTMLSelectElement | null;
+    const value = sel?.value ?? 'random';
+    if (!(DIFFICULTIES as readonly string[]).includes(value)) return undefined;
+    let recent: number[] = [];
+    try {
+      recent = JSON.parse(localStorage.getItem(RECENT_SEEDS_KEY) ?? '[]') as number[];
+    } catch { recent = []; }
+    const seed = pickSeed(value as Difficulty, Math.random, new Set(recent));
+    try {
+      localStorage.setItem(RECENT_SEEDS_KEY, JSON.stringify([...recent, seed].slice(-RECENT_SEEDS_MAX)));
+    } catch { /* 저장 실패는 무시 */ }
+    return seed;
+  }
+
+  /** 난이도 선택 복원/저장 */
+  private _bindDifficulty(): void {
+    const sel = document.getElementById('difficulty-select') as HTMLSelectElement | null;
+    if (!sel) return;
+    try {
+      const saved = localStorage.getItem(DIFFICULTY_KEY);
+      if (saved && Array.from(sel.options).some(o => o.value === saved)) sel.value = saved;
+    } catch { /* 무시 */ }
+    sel.addEventListener('change', () => {
+      try { localStorage.setItem(DIFFICULTY_KEY, sel.value); } catch { /* 무시 */ }
+      sel.blur();   // 키보드 단축키(N 등)가 select에 먹히지 않도록
+    });
+  }
+
   private _newGame(): void {
     // 키보드(N)로 시작하는 경우에도 소리가 나도록 사운드 초기화 (사용자 제스처 내)
     void this.sound.init();
     this._stopTimer();
     this.storage.clear();
-    this.game.deal();
+    this.game.deal(this._chooseSeed());
     this.elapsed = 0;
     this._startTimer();
     this._hideAllOverlays();

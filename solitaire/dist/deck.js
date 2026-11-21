@@ -1,4 +1,5 @@
 import { Card, Figure, CardNumber } from './card.js';
+import { mulberry32, randomSeed } from './rng.js';
 // ─── 덱 인덱스 상수 ─────────────────────────────────────────────────────────
 // SolitaireGame.decks[] 배열 내 각 덱의 인덱스
 // Android 원본과 대응:
@@ -56,10 +57,14 @@ export class Deck {
 }
 // ─── InitDeck: 52장 셔플 덱 ──────────────────────────────────────────────────
 export class InitDeck extends Deck {
-    constructor() {
+    /** @param seed 셔플 시드. 생략하면 랜덤 시드를 생성한다. */
+    constructor(seed) {
         super();
+        this._seed = (seed ?? randomSeed()) >>> 0;
         this._createAndShuffle();
     }
+    /** 이 덱을 만든 셔플 시드 (같은 시드 → 같은 배치) */
+    get seed() { return this._seed; }
     _createAndShuffle() {
         this._cards = [];
         const figures = [Figure.Club, Figure.Diamond, Figure.Heart, Figure.Spade];
@@ -73,8 +78,9 @@ export class InitDeck extends Deck {
         this._shuffle();
     }
     _shuffle() {
+        const rand = mulberry32(this._seed);
         for (let i = this._cards.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = Math.floor(rand() * (i + 1));
             [this._cards[i], this._cards[j]] = [this._cards[j], this._cards[i]];
         }
     }

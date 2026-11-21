@@ -36,6 +36,8 @@ export class SolitaireGame {
   private _moveCount: number = 0;
   /** deal() 직후 초기 배치 스냅샷 ("다시 하기"로 같은 배열 재시작용) */
   private _initialDeal: SavedDeck[] | null = null;
+  /** 현재 판의 셔플 시드 (deal() 시 기록) */
+  private _seed: number = 0;
 
   constructor() {
     this._buildDecks();
@@ -46,6 +48,7 @@ export class SolitaireGame {
   get state(): GameState  { return this._state; }
   get moveCount(): number { return this._moveCount; }
   get canUndo(): boolean  { return this._history.length > 0; }
+  get seed(): number      { return this._seed; }
 
   getDeck(index: DeckIndex): Deck { return this._decks[index]; }
 
@@ -68,13 +71,15 @@ export class SolitaireGame {
    * - 태블로 1열: 1장, 2열: 2장, ..., 7열: 7장 (28장 총)
    * - 각 열 맨 위 카드만 앞면
    * - 나머지 24장 → 스톡(뒤집어서)
+   * @param seed 지정하면 같은 시드로 항상 같은 배치. 생략 시 랜덤.
    */
-  deal(): void {
+  deal(seed?: number): void {
     this._buildDecks();
     this._history = [];
     this._moveCount = 0;
 
-    const init = new InitDeck();
+    const init = new InitDeck(seed);
+    this._seed = init.seed;
 
     // 태블로에 배분 (Android PlayState.runInitBoardCmd 참조)
     // 1열: 1장, 2열: 2장, ..., 7열: 7장
