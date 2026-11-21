@@ -1,5 +1,11 @@
 <!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>history</title></head><body>
 <h1>작업 이력</h1>
+<h2>2026-11-22 — 모바일에서 자동완성 버튼 표시</h2>
+<ul>
+<li>style.css: 600px 이하에서 .btn-autocomplete를 숨기던 규칙 제거</li>
+<li>브라우저 확인(iframe으로 344/360/390/412/500px 측정): 모든 폭에서 버튼 표시, 가로 스크롤/겹침 없음. 버튼이 두 줄이 되어 헤더 높이 61→86px</li>
+<li>참고: 400px 이하에서 스톡 개수 통계와 소리 버튼은 기존대로 숨김</li>
+</ul>
 <h2>2026-11-22 — LFSR 시드 순환(한 바퀴 동안 중복 없음)</h2>
 <ul>
 <li>src/lfsr.ts 신규: 11비트 최대주기 LFSR(x^11+x^9+1, 주기 2047). 목록 길이(2000)를 넘는 상태는 건너뛰어 중복 시드 없이 2000판을 한 바퀴로 순환</li>

@@ -403,7 +403,6 @@ kbd {
   #header h1 { font-size: 0.85rem; }
   .btn { padding: 3px 6px; font-size: 0.66rem; }
   .stat-value { font-size: 0.82rem; }
-  .btn-autocomplete { display: none; }
   .btn-restart { font-size: 0.66rem; }
 }
 
